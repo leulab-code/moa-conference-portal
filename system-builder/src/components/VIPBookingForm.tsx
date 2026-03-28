@@ -1,0 +1,357 @@
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApp } from '@/lib/app-context';
+import { DailySchedule } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { format, parseISO, eachDayOfInterval } from 'date-fns';
+import { Paperclip, Star, AlertTriangle, UserPlus, Info } from 'lucide-react';
+import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
+import { EthDateTime } from 'ethiopian-calendar-date-converter';
+
+const steps = [
+  { num: 1, label: 'VIP DETAILS' },
+  { num: 2, label: 'VENUE' },
+  { num: 3, label: 'SERVICES' },
+  { num: 4, label: 'FINISH' },
+];
+
+export default function VIPBookingForm({ onComplete }: { onComplete: () => void }) {
+  const navigate = useNavigate();
+  const { user, bookings, venues, addBooking, refreshData, technicalServices, supportServices, servicePrices } = useApp();
+  
+  useEffect(() => { refreshData(); }, [refreshData]);
+  
+  const [currentStep, setCurrentStep] = useState(1);
+  const [form, setForm] = useState({
+    venueId: '', eventTitle: '', eventDescription: '', organizerName: '', organizerOrganization: '', organizerEmail: '', organizerPhone: '',
+    startDate: '', endDate: '', participantCount: '', technicalServices: [] as string[], supportServices: [] as string[],
+    dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
+    status: 'override', 
+    asGuest: !user, 
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [clashWarning, setClashWarning] = useState<string | null>(null);
+  const [submittedBookingId, setSubmittedBookingId] = useState<string | null>(null);
+
+  const getEthDateString = (gregStr: string) => {
+    if (!gregStr) return '';
+    try {
+      const [y, m, d] = gregStr.split('-').map(Number);
+      const gDate = new Date(y, m - 1, d, 12, 0, 0); 
+      const ethDate = EthDateTime.fromEuropeanDate(gDate);
+      return `${ETH_MONTHS[ethDate.month - 1]} ${ethDate.date}, ${ethDate.year}`;
+    } catch { return gregStr; }
+  };
+
+  const selectedVenue = venues.find(v => v.id === form.venueId);
+
+  const bookedDates = useMemo(() => {
+    if (!form.venueId) return [];
+    const dates: Date[] = [];
+    bookings.filter(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'override')
+    .forEach(b => {
+      try {
+        const start = parseISO(b.startDate); const end = parseISO(b.endDate);
+        if (start && end && start <= end) dates.push(...eachDayOfInterval({ start, end }));
+      } catch (e) {}
+    });
+    return dates;
+  }, [bookings, form.venueId]);
+
+  useEffect(() => {
+    if (form.startDate && form.endDate && form.endDate >= form.startDate) {
+      const dates = [];
+      const [sy, sm, sd] = form.startDate.split('-').map(Number);
+      const [ey, em, ed] = form.endDate.split('-').map(Number);
+      let currentDate = new Date(sy, sm - 1, sd, 12, 0, 0); 
+      const end = new Date(ey, em - 1, ed, 12, 0, 0); 
+      while (currentDate <= end && dates.length < 30) {
+        dates.push(format(currentDate, 'yyyy-MM-dd'));
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      setForm(prev => {
+        const newSchedules = dates.map(d => prev.dailySchedules.find(s => s.date === d) || { date: d, startTime: '08:00', endTime: '12:00', allDay: false });
+        return { ...prev, dailySchedules: newSchedules };
+      });
+    }
+  }, [form.startDate, form.endDate]);
+
+  // NEW: Daily Cleaning Logic (06:00 - 08:00)
+  const hasCleaningConflict = useMemo(() => {
+    return form.dailySchedules.some(s => {
+      const start = s.startTime.substring(0, 5);
+      const end = s.endTime.substring(0, 5);
+      return start < '08:00' && end > '06:00';
+    });
+  }, [form.dailySchedules]);
+
+  const serviceFee = useMemo(() => {
+    return [...form.technicalServices, ...form.supportServices].reduce((sum, id) => sum + (servicePrices[[...technicalServices, ...supportServices].find(x => x.id === id)?.name || ''] || 0), 0);
+  }, [form.technicalServices, form.supportServices, technicalServices, supportServices, servicePrices]);
+
+  const venueFee = (selectedVenue?.price || 0) * (form.dailySchedules.length || 1);
+  const totalPayable = venueFee + serviceFee;
+
+  const validateStep = (step: number) => {
+    const errs: Record<string, string> = {};
+    if (step === 1) {
+      if (!form.organizerName.trim()) errs.organizerName = 'Name is required';
+      if (!form.eventTitle.trim()) errs.eventTitle = 'Event Title is required';
+    } else if (step === 2) {
+      if (!form.venueId) errs.venueId = 'Please select a venue';
+      if (!form.participantCount) errs.participantCount = 'Required';
+      if (!form.startDate || !form.endDate) errs.startDate = 'Dates are required';
+
+      setClashWarning(null);
+      if (form.venueId && form.startDate && form.endDate) {
+        const vipConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'override' && b.startDate <= form.endDate && b.endDate >= form.startDate);
+        if (vipConflict) {
+           errs.startDate = 'This date is already secured by another VIP Override.';
+           toast.error('Another VIP has already secured these dates!');
+        } else {
+           const regConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && ['confirmed', 'approved', 'reserved'].includes(b.status.toLowerCase()) && b.startDate <= form.endDate && b.endDate >= form.startDate);
+           if (regConflict) {
+              setClashWarning(`Warning: This VIP booking overlaps with "${regConflict.eventTitle}". Proceeding will automatically cancel their booking.`);
+           }
+        }
+      }
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setForm(prev => ({ ...prev, letterAttachment: file }));
+  };
+
+  const nextStep = () => { if (validateStep(currentStep)) { window.scrollTo(0, 0); setCurrentStep(p => Math.min(4, p + 1)); } };
+  const prevStep = () => { window.scrollTo(0, 0); setCurrentStep(p => Math.max(1, p - 1)); };
+
+  const handleSubmit = async () => {
+    if (!validateStep(1) || !validateStep(2)) return;
+    try {
+      const data = await addBooking({ ...form, participantCount: parseInt(form.participantCount) });
+      setSubmittedBookingId(data.id || data.reference_id || data.pk || 'UNKNOWN');
+      toast.success('VIP Override Successful!');
+    } catch (error) { toast.error('Submission error'); }
+  };
+
+  const toggleService = (type: 'technicalServices' | 'supportServices', id: string) => {
+    setForm(prev => ({ ...prev, [type]: prev[type].includes(id) ? prev[type].filter(s => s !== id) : [...prev[type], id] }));
+  };
+
+  const updateSchedule = (index: number, field: keyof DailySchedule, value: string | boolean) => {
+    setForm(prev => {
+      const newSchedules = [...prev.dailySchedules];
+      newSchedules[index] = { ...newSchedules[index], [field]: value };
+      return { ...prev, dailySchedules: newSchedules };
+    });
+  };
+
+  const generateHourOptions = () => Array.from({ length: 24 }, (_, i) => {
+    const formatted = i.toString().padStart(2, '0') + ':00';
+    return <option key={formatted} value={formatted}>{formatted}</option>;
+  });
+
+  const inputClass = (field: string) => `w-full text-sm border rounded-lg px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${errors[field] ? 'border-red-300 ring-4 ring-red-50' : 'border-slate-200'}`;
+
+  if (submittedBookingId) {
+    return (
+      <div className="max-w-xl mx-auto mt-16 bg-white rounded-[2rem] shadow-xl p-10 text-center border border-slate-100 animate-in zoom-in-95">
+         <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-8">
+           <Star className="w-12 h-12 text-purple-600" />
+         </div>
+         <h2 className="text-3xl font-serif font-black text-slate-800 mb-3 tracking-tight">VIP Slot Secured!</h2>
+         <p className="text-slate-500 font-medium mb-8 text-sm">
+           This event has been forcefully prioritized in the system. Any overlapping events have been automatically cancelled.
+         </p>
+         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-10 shadow-inner">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">VIP Booking Reference</p>
+           <p className="text-3xl font-black text-purple-700 tracking-wider">MOA-BKG-{submittedBookingId}</p>
+         </div>
+         <Button onClick={() => window.location.reload()} className="w-full py-6 bg-[#111827] hover:bg-slate-800 text-white font-black rounded-xl uppercase tracking-widest">
+           Return Home
+         </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto py-10 px-4" style={{ animation: 'fade-in-up 0.6s cubic-bezier(0.16,1,0.3,1) both' }}>
+      
+      {!user && (
+        <div className="bg-slate-900 text-white rounded-3xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xl">
+           <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center"><UserPlus size={24} className="text-emerald-400"/></div>
+              <div>
+                <h3 className="font-bold text-lg leading-tight">Want to track and manage your bookings?</h3>
+                <p className="text-sm text-slate-400">Register or Sign In to access your personal dashboard.</p>
+              </div>
+           </div>
+           <button onClick={() => navigate('/login')} className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-3 rounded-xl font-black transition-colors whitespace-nowrap">
+              Register / Sign In
+           </button>
+        </div>
+      )}
+
+      <div className="bg-gradient-to-r from-purple-900 to-purple-800 rounded-3xl p-8 mb-8 text-white shadow-xl flex items-center gap-6">
+        <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20">
+          <Star className="w-8 h-8 text-amber-400" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black tracking-tight uppercase">VIP Priority Booking</h1>
+          <p className="text-purple-200 font-medium text-sm mt-1">Directly secure venue slots for high-priority officials.</p>
+        </div>
+      </div>
+
+      <div className="flex justify-center items-center gap-4 sm:gap-8 mb-8">
+        {steps.map((s) => (
+          <div key={s.num} className="flex flex-col items-center gap-2 group cursor-pointer" onClick={() => setCurrentStep(s.num)}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${currentStep === s.num ? 'bg-purple-600 text-white shadow-md scale-110' : currentStep > s.num ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
+              {s.num}
+            </div>
+            <span className={`text-[10px] font-extrabold uppercase tracking-widest ${currentStep === s.num ? 'text-purple-600' : 'text-slate-400'}`}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-8 border border-purple-100">
+        
+        {currentStep === 1 && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+               <h2 className="text-xl font-black text-slate-800">VIP Details</h2>
+            </div>
+            
+            <div className="grid sm:grid-cols-2 gap-6">
+              <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Name *</label><input value={form.organizerName} onChange={e => setForm(p => ({ ...p, organizerName: e.target.value }))} className={inputClass('organizerName')} />{errors.organizerName && <p className="text-xs text-red-500 mt-1 font-bold">{errors.organizerName}</p>}</div>
+              <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Organization / Ministry</label><input value={form.organizerOrganization} onChange={e => setForm(p => ({ ...p, organizerOrganization: e.target.value }))} className={inputClass('organizerOrganization')} /></div>
+              <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Email</label><input type="email" value={form.organizerEmail} onChange={e => setForm(p => ({ ...p, organizerEmail: e.target.value }))} className={inputClass('organizerEmail')} /></div>
+              <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Phone</label><input value={form.organizerPhone} onChange={e => setForm(p => ({ ...p, organizerPhone: e.target.value }))} className={inputClass('organizerPhone')} /></div>
+            </div>
+            <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Event Title *</label><input value={form.eventTitle} onChange={e => setForm(p => ({ ...p, eventTitle: e.target.value }))} className={inputClass('eventTitle')} />{errors.eventTitle && <p className="text-xs text-red-500 mt-1 font-bold">{errors.eventTitle}</p>}</div>
+            <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Description</label><textarea rows={3} value={form.eventDescription} onChange={e => setForm(p => ({ ...p, eventDescription: e.target.value }))} className={inputClass('eventDescription')} /></div>
+            
+            <Button onClick={nextStep} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold h-12 rounded-xl mt-4">Continue to Venue</Button>
+          </div>
+        )}
+
+        {currentStep === 2 && (
+          <div className="space-y-6 animate-in fade-in">
+            <h2 className="text-xl font-black text-slate-800 mb-6 pb-4 border-b border-slate-100">Select Venue & Override Date</h2>
+            <div className="grid sm:grid-cols-2 gap-6">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Venue *</label>
+                <select value={form.venueId} onChange={e => setForm(p => ({ ...p, venueId: e.target.value }))} className={inputClass('venueId')}>
+                  <option value="">Choose...</option>
+                  {venues.map(v => {
+                    // @ts-ignore
+                    const isBroken = v.status === 'out_of_order';
+                    return (
+                      <option key={v.id} value={v.id} disabled={isBroken}>
+                        {v.name} {isBroken ? ' (❌ OUT OF ORDER)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+                {errors.venueId && <p className="text-xs text-red-500 mt-1 font-bold">{errors.venueId}</p>}
+              </div>
+              <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Attendees *</label><input type="number" min="1" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={inputClass('participantCount')} />{errors.participantCount && <p className="text-xs text-red-500 mt-1 font-bold">{errors.participantCount}</p>}</div>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-8 items-start bg-slate-50 p-6 rounded-2xl border border-slate-100">
+               <EthiopianCalendar selected={{ from: form.startDate ? parseISO(form.startDate) : undefined, to: form.endDate ? parseISO(form.endDate) : undefined }} onSelect={(range) => setForm(p => ({ ...p, startDate: range?.from ? format(range.from, 'yyyy-MM-dd') : '', endDate: range?.to ? format(range.to, 'yyyy-MM-dd') : '' }))} bookedDates={bookedDates} />
+               <div className="flex-1 w-full space-y-4">
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Start Date</label><div className={`px-4 py-3 bg-white border rounded-lg text-sm font-bold ${errors.startDate ? 'border-red-300' : 'border-slate-200'}`}>{form.startDate ? getEthDateString(form.startDate) : '...'}</div>{errors.startDate && <p className="text-xs text-red-500 mt-1 font-bold">{errors.startDate}</p>}</div>
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">End Date</label><div className="px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold">{form.endDate ? getEthDateString(form.endDate) : '...'}</div></div>
+               </div>
+            </div>
+
+            {/* NEW: Daily Cleaning Notice */}
+            {hasCleaningConflict && (
+              <div className="bg-amber-50 text-amber-800 p-5 rounded-2xl border border-amber-200 flex items-start gap-4 mt-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 shadow-sm">
+                  <Info className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm mb-1 uppercase tracking-wider text-amber-900">Mandatory Cleaning Time</h4>
+                  <p className="text-sm font-medium opacity-90 leading-relaxed">
+                    This venue undergoes daily cleaning operations from <strong className="font-black">06:00 to 08:00</strong>. Your selected time overlaps with this block. Please note that cleaning staff will be on site.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {clashWarning && (
+              <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 flex gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <p className="text-sm font-bold">{clashWarning}</p>
+              </div>
+            )}
+
+            {form.dailySchedules.map((schedule, idx) => (
+              <div key={schedule.date} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-100 p-4 rounded-xl bg-slate-50">
+                <span className="font-bold text-sm text-slate-700">{getEthDateString(schedule.date)}</span>
+                <div className="flex items-center gap-2">
+                  <select value={schedule.startTime.substring(0, 5)} onChange={e => updateSchedule(idx, 'startTime', e.target.value)} className="bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold">{generateHourOptions()}</select>
+                  <span>to</span>
+                  <select value={schedule.endTime.substring(0, 5)} onChange={e => updateSchedule(idx, 'endTime', e.target.value)} className="bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold">{generateHourOptions()}</select>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex gap-4 mt-4">
+              <Button variant="outline" onClick={prevStep} className="flex-1 font-bold h-12 rounded-xl">Back</Button>
+              <Button onClick={nextStep} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold h-12 rounded-xl">Continue</Button>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 3 && (
+          <div className="space-y-6 animate-in fade-in">
+             <h2 className="text-xl font-black text-slate-800 mb-6 pb-4 border-b border-slate-100">VIP Services</h2>
+             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {technicalServices.map(s => (
+                  <div key={s.id} onClick={() => toggleService('technicalServices', s.id)} className={`p-3 rounded-xl border-2 cursor-pointer transition-colors ${form.technicalServices.includes(s.id) ? 'border-purple-600 bg-purple-50' : 'border-slate-100'}`}>
+                     <p className="text-xs font-bold text-slate-700">{s.name}</p>
+                  </div>
+                ))}
+             </div>
+             
+             <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center mt-6 cursor-pointer hover:bg-slate-50" onClick={() => document.getElementById('file')?.click()}>
+                <input id="file" type="file" className="hidden" accept=".pdf" onChange={handleFileChange} />
+                <Paperclip className="mx-auto text-slate-400 mb-2" />
+                <p className="text-sm font-bold">{form.letterAttachment ? form.letterAttachment.name : 'Attach Official Mandate (Optional)'}</p>
+             </div>
+
+             <div className="flex gap-4 mt-8">
+              <Button variant="outline" onClick={prevStep} className="flex-1 font-bold h-12 rounded-xl">Back</Button>
+              <Button onClick={nextStep} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold h-12 rounded-xl">Review</Button>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 4 && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-purple-50 text-purple-900 rounded-2xl p-8 border border-purple-200">
+               <h3 className="text-2xl font-black mb-4">Confirm VIP Override</h3>
+               <p className="mb-2"><strong>Event:</strong> {form.eventTitle}</p>
+               <p className="mb-2"><strong>Venue:</strong> {selectedVenue?.name}</p>
+               <p className="mb-6"><strong>Total Due:</strong> {totalPayable.toFixed(2)} ETB</p>
+               
+               <div className="flex gap-4">
+                 <Button variant="outline" onClick={prevStep} className="flex-1 bg-white font-bold h-14 rounded-xl border-purple-200 text-purple-700 hover:bg-purple-100">Back</Button>
+                 <Button onClick={handleSubmit} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold h-14 rounded-xl shadow-xl shadow-purple-600/30">
+                   FORCE OVERRIDE
+                 </Button>
+               </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
