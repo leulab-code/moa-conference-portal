@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { Booking, UserRole, TechnicalService, SupportService, Venue, SystemUser } from './types';
 import { toast } from 'sonner';
 
-export const API_BASE = 'http://localhost:8000/api';
-const SERVER_URL = 'http://localhost:8000';
+export const API_BASE = 'https://moa-conference-portal.onrender.com/api';
+const SERVER_URL = 'https://moa-conference-portal.onrender.com';
 
 interface AppContextType {
   role: UserRole;
