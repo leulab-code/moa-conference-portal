@@ -42,8 +42,7 @@ export default function TrackBookingPage() {
   // FIX: Added 'approved' and 'override' so they get their beautiful colors
   const getStatusInfo = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'reserved': return { label: 'Pending Approval', color: 'bg-amber-100 text-amber-700 border-amber-200' };
-      case 'approved': return { label: 'Approved (Awaiting Payment)', color: 'bg-blue-100 text-blue-700 border-blue-200' };
+      case 'approved': return { label: 'Pending Approval', color: 'bg-amber-100 text-amber-700 border-amber-200' };
       case 'confirmed': return { label: 'Confirmed', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
       case 'override': return { label: 'VIP Override', color: 'bg-purple-100 text-purple-700 border-purple-200' };
       case 'rejected': return { label: 'Rejected', color: 'bg-rose-100 text-rose-700 border-rose-200' };

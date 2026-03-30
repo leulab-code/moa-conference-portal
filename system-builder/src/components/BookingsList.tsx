@@ -68,7 +68,7 @@ export default function BookingsList() {
       case 'completed':
         return { color: 'text-emerald-700', bg: 'bg-emerald-100', icon: <CheckCircle2 size={16} />, label: 'Confirmed' };
       case 'approved':
-        return { color: 'text-blue-700', bg: 'bg-blue-100', icon: <CheckCircle2 size={16} />, label: 'Approved (Awaiting Payment)' };
+        return { color: 'text-slate-700', bg: 'bg-slate-100', icon: <Clock3 size={16} />, label: 'Pending' };
       case 'reserved':
         return { color: 'text-amber-700', bg: 'bg-amber-100', icon: <Clock3 size={16} />, label: 'Pending Approval' };
       case 'rejected':
