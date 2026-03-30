@@ -25,7 +25,7 @@ export default function VenueOperations() {
 
     if (confirm(confirmMsg)) {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/venues/${venueId}/`, {
+        const response = await fetch(`https://moa-conference-portal.onrender.com/api/venues/${venueId}/`, {
           method: 'PATCH',
           // FIX: Use the context token here so Django accepts the request
           headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
