@@ -50,8 +50,8 @@ CORS_ALLOW_ALL_ORIGINS=True
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USE_TLS=True
-EMAIL_HOST_USER=leulabetu@gmail.com
-EMAIL_HOST_PASSWORD=njwalntzeeadfjxw
+EMAIL_HOST_USER=''
+EMAIL_HOST_PASSWORD=''
 \`\`\`
 
 Run migrations and start the server:
