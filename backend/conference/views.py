@@ -2,6 +2,7 @@
 API views for the Conference Management System.
 Full role-based access control with proper permissions.
 """
+import traceback  # <--- ADDED THIS IMPORT FOR ERROR LOGGING
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -221,16 +222,28 @@ class BookingViewSet(viewsets.ModelViewSet):
         if old_status != new_status:
             self._trigger_email(booking, new_status)
 
+    # <--- THIS IS THE FUNCTION WE UPDATED --->
     def _trigger_email(self, booking, status):
         """Internal helper to send emails based on status"""
-        if status == 'received':
-            send_automated_email(booking, 'received')
-        elif status == 'approved':
-            send_automated_email(booking, 'approved')
-        elif status == 'confirmed':
-            send_automated_email(booking, 'confirmed')
-        elif status == 'rejected':
-            send_automated_email(booking, 'rejected')
+        try:
+            if status == 'received':
+                send_automated_email(booking, 'received')
+            elif status == 'approved':
+                send_automated_email(booking, 'approved')
+            elif status == 'confirmed':
+                send_automated_email(booking, 'confirmed')
+            elif status == 'rejected':
+                send_automated_email(booking, 'rejected')
+        except Exception as e:
+            # 1. Print the exact error to the Render Logs
+            print(f"===== EMAIL SENDING FAILED FOR STATUS: {status.upper()} =====")
+            print(traceback.format_exc())
+            
+            # 2. Force the API to return the error to your React frontend
+            raise ValidationError({
+                "email_error": "Failed to send automated email.",
+                "details": str(e)
+            })
 
     def get_permissions(self):
         if self.action in ['create', 'track', 'public_cancel', 'public_edit']:
@@ -346,7 +359,6 @@ class BookingViewSet(viewsets.ModelViewSet):
         if booking.status not in ('reserved', 'confirmed', 'approved', 'override'):
             return Response({'error': 'Only active bookings can be cancelled.'}, status=400)
 
-        # Removed the broken Gregorian math. Frontend handles the lock.
         booking.status = 'cancelled'
         booking.save()
         return Response(BookingSerializer(booking, context={'request': request}).data)
@@ -372,7 +384,6 @@ class BookingViewSet(viewsets.ModelViewSet):
             if booking.status not in ('reserved', 'confirmed', 'approved'):
                 return Response({'error': 'Only pending or confirmed bookings can be cancelled.'}, status=400)
             
-            # Removed the broken Gregorian math. Frontend handles the lock.
             booking.status = 'cancelled'
             booking.save()
             return Response(BookingSerializer(booking, context={'request': request}).data)
@@ -389,7 +400,6 @@ class BookingViewSet(viewsets.ModelViewSet):
             if booking.status in ('cancelled', 'completed', 'rejected'):
                 return Response({'error': 'Cannot edit this booking status.'}, status=400)
             
-            # Removed the broken Gregorian math. Frontend handles the lock.
             booking.event_title = request.data.get('event_title', booking.event_title)
             booking.event_description = request.data.get('event_description', booking.event_description)
             booking.organizer_phone = request.data.get('organizer_phone', booking.organizer_phone)
