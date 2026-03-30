@@ -136,6 +136,8 @@ class BookingSerializer(serializers.ModelSerializer):
     assigned_tech = serializers.JSONField(required=False, write_only=True)
     technical_services = serializers.PrimaryKeyRelatedField(many=True, queryset=TechnicalService.objects.all(), required=False)
     support_services = serializers.PrimaryKeyRelatedField(many=True, queryset=SupportService.objects.all(), required=False)
+    unavailable_technical_services = serializers.PrimaryKeyRelatedField(many=True, queryset=TechnicalService.objects.all(), required=False)
+    unavailable_support_services = serializers.PrimaryKeyRelatedField(many=True, queryset=SupportService.objects.all(), required=False)
 
     class Meta:
         model = Booking
@@ -153,11 +155,15 @@ class BookingSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         tech = validated_data.pop('technical_services', None)
         supp = validated_data.pop('support_services', None)
+        unavailable_tech = validated_data.pop('unavailable_technical_services', None)
+        unavailable_supp = validated_data.pop('unavailable_support_services', None)
         assigned_tech = validated_data.pop('assigned_tech', None)
         for attr, value in validated_data.items(): setattr(instance, attr, value)
         instance.save()
         if tech is not None: instance.technical_services.set(tech)
         if supp is not None: instance.support_services.set(supp)
+        if unavailable_tech is not None: instance.unavailable_technical_services.set(unavailable_tech)
+        if unavailable_supp is not None: instance.unavailable_support_services.set(unavailable_supp)
         if assigned_tech is not None:
             TaskAllocation.objects.filter(booking=instance).delete()
             for date_str, staff_id in assigned_tech.items():

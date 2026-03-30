@@ -2,7 +2,6 @@
 API views for the Conference Management System.
 Full role-based access control with proper permissions.
 """
-import traceback  # <--- ADDED THIS IMPORT FOR ERROR LOGGING
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -222,28 +221,16 @@ class BookingViewSet(viewsets.ModelViewSet):
         if old_status != new_status:
             self._trigger_email(booking, new_status)
 
-    # <--- THIS IS THE FUNCTION WE UPDATED --->
     def _trigger_email(self, booking, status):
         """Internal helper to send emails based on status"""
-        try:
-            if status == 'received':
-                send_automated_email(booking, 'received')
-            elif status == 'approved':
-                send_automated_email(booking, 'approved')
-            elif status == 'confirmed':
-                send_automated_email(booking, 'confirmed')
-            elif status == 'rejected':
-                send_automated_email(booking, 'rejected')
-        except Exception as e:
-            # 1. Print the exact error to the Render Logs
-            print(f"===== EMAIL SENDING FAILED FOR STATUS: {status.upper()} =====")
-            print(traceback.format_exc())
-            
-            # 2. Force the API to return the error to your React frontend
-            raise ValidationError({
-                "email_error": "Failed to send automated email.",
-                "details": str(e)
-            })
+        if status == 'received':
+            send_automated_email(booking, 'received')
+        elif status == 'approved':
+            send_automated_email(booking, 'approved')
+        elif status == 'confirmed':
+            send_automated_email(booking, 'confirmed')
+        elif status == 'rejected':
+            send_automated_email(booking, 'rejected')
 
     def get_permissions(self):
         if self.action in ['create', 'track', 'public_cancel', 'public_edit']:
@@ -267,9 +254,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             if role == 'organizer':
                 qs = qs.filter(Q(user=user) | scheduled_q).distinct()
             elif role == 'ict_admin':
-                qs = qs.filter(Q(technical_services__isnull=False) | scheduled_q).distinct()
+                qs = qs.filter(technical_services__isnull=False).distinct()
             elif role == 'catering_support':
-                qs = qs.filter(Q(support_services__isnull=False) | scheduled_q).distinct()
+                qs = qs.filter(support_services__isnull=False).distinct()
         else:
             return qs.none()
 
@@ -359,6 +346,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         if booking.status not in ('reserved', 'confirmed', 'approved', 'override'):
             return Response({'error': 'Only active bookings can be cancelled.'}, status=400)
 
+        # Removed the broken Gregorian math. Frontend handles the lock.
         booking.status = 'cancelled'
         booking.save()
         return Response(BookingSerializer(booking, context={'request': request}).data)
@@ -384,6 +372,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             if booking.status not in ('reserved', 'confirmed', 'approved'):
                 return Response({'error': 'Only pending or confirmed bookings can be cancelled.'}, status=400)
             
+            # Removed the broken Gregorian math. Frontend handles the lock.
             booking.status = 'cancelled'
             booking.save()
             return Response(BookingSerializer(booking, context={'request': request}).data)
@@ -412,6 +401,42 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response(BookingSerializer(booking, context={'request': request}).data)
         except (Booking.DoesNotExist, ValueError):
             return Response({'error': 'Booking not found.'}, status=404)
+
+    @action(detail=True, methods=['patch'], url_path='acknowledge_ict', permission_classes=[IsICTOrAdmin])
+    def acknowledge_ict(self, request, pk=None):
+        booking = self.get_object()
+        booking.ict_acknowledged = request.data.get('ict_acknowledged', True)
+        if booking.ict_acknowledged:
+            booking.ict_rejected = False
+            booking.ict_rejection_reason = ""
+        booking.save()
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='set_unavailable_services', permission_classes=[IsICTOrAdmin])
+    def set_unavailable_services(self, request, pk=None):
+        booking = self.get_object()
+        services_ids = request.data.get('unavailable_technical_services', [])
+        services = TechnicalService.objects.filter(id__in=services_ids)
+        booking.unavailable_technical_services.set(services)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='set_unavailable_support_services', permission_classes=[IsCateringOrAdmin])
+    def set_unavailable_support_services(self, request, pk=None):
+        booking = self.get_object()
+        services_ids = request.data.get('unavailable_support_services', [])
+        services = SupportService.objects.filter(id__in=services_ids)
+        booking.unavailable_support_services.set(services)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='acknowledge_catering', permission_classes=[IsCateringOrAdmin])
+    def acknowledge_catering(self, request, pk=None):
+        booking = self.get_object()
+        booking.catering_acknowledged = request.data.get('catering_acknowledged', True)
+        if booking.catering_acknowledged:
+            booking.catering_rejected = False
+            booking.catering_rejection_reason = ""
+        booking.save()
+        return Response(BookingSerializer(booking, context={'request': request}).data)
 
 class SystemUserViewSet(viewsets.ModelViewSet):
     queryset           = SystemUser.objects.select_related('user').all()

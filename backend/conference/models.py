@@ -143,6 +143,16 @@ class Booking(models.Model):
         blank=True,
         related_name='bookings',
     )
+    unavailable_technical_services = models.ManyToManyField(
+        TechnicalService,
+        blank=True,
+        related_name='unavailable_for_bookings',
+    )
+    unavailable_support_services = models.ManyToManyField(
+        SupportService,
+        blank=True,
+        related_name='unavailable_support_for_bookings',
+    )
     
     letter_attachment = models.FileField(
         upload_to='booking_letters/',
@@ -151,7 +161,13 @@ class Booking(models.Model):
     )
     
     ict_acknowledged = models.BooleanField(default=False)
+    ict_rejected = models.BooleanField(default=False)
+    ict_rejection_reason = models.TextField(blank=True, default='')
+
     catering_acknowledged = models.BooleanField(default=False)
+    catering_rejected = models.BooleanField(default=False)
+    catering_rejection_reason = models.TextField(blank=True, default='')
+
     rejection_reason = models.TextField(blank=True, default='')
     
     venue_daily_rate = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
