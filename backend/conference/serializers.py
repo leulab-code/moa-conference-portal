@@ -79,16 +79,13 @@ class VenueSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def to_internal_value(self, data):
-    
         if hasattr(data, 'dict'):
             data_dict = data.dict()
         else:
             data_dict = data.copy() if hasattr(data, 'copy') else dict(data)
-            
-         
+             
         included = data_dict.get('included_services')
         
-     
         if isinstance(included, str) and included.strip():
             try:
                 data_dict['included_services'] = json.loads(included)
@@ -97,15 +94,32 @@ class VenueSerializer(serializers.ModelSerializer):
         elif not included:
             data_dict['included_services'] = []
             
-        
         return super().to_internal_value(data_dict)
 
     def to_representation(self, instance):
+        # 1. Get the default representation (which has the IDs)
         rep = super().to_representation(instance)
+        
+        # 2. Keep your existing cleaning exceptions logic
         rep['cleaning_exceptions'] = {
             str(m.date): {'start': str(m.start_time)[:5], 'end': str(m.end_time)[:5]} 
             for m in instance.maintenance_updates.all()
         }
+        
+        # 3. THE FIX: Translate IDs to actual names for React
+        from .models import TechnicalService
+        try:
+            # If your model uses a ManyToManyField
+            services = instance.included_services.all()
+            rep['included_services'] = [{'id': s.id, 'name': s.name} for s in services]
+        except AttributeError:
+            # If your model uses a JSONField storing a list of IDs
+            if isinstance(instance.included_services, list):
+                services = TechnicalService.objects.filter(id__in=instance.included_services)
+                rep['included_services'] = [{'id': s.id, 'name': s.name} for s in services]
+            else:
+                rep['included_services'] = []
+                
         return rep
 
     def update(self, instance, validated_data):
