@@ -30,7 +30,7 @@ const serviceIcons: Record<string, React.ReactNode> = {
 };
 
 export default function TechnicalTasks() {
-  const { bookings, venues, technicalServices, acknowledgeTechnicalTask } = useApp();
+  const { bookings, venues, technicalServices, acknowledgeTechnicalTask, toggleTechnicalServiceAvailability } = useApp();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Filter ONLY bookings that have technical services requested
@@ -124,22 +124,6 @@ export default function TechnicalTasks() {
                       </div>
                     </div>
 
-                    {/* Service Preview Pills */}
-                    <div className="hidden xl:flex flex-wrap gap-2 max-w-sm justify-end">
-                      {b.technicalServices.slice(0, 3).map(id => {
-                        const s = technicalServices.find(ts => ts.id === id);
-                        return s ? (
-                          <span key={id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-slate-600 text-xs font-bold">
-                            {serviceIcons[s.name] || serviceIcons.default}
-                            {s.name}
-                          </span>
-                        ) : null;
-                      })}
-                      {b.technicalServices.length > 3 && (
-                        <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100">+{b.technicalServices.length - 3}</span>
-                      )}
-                    </div>
-
                     {/* Action Toggle */}
                     <div className="flex items-center gap-3">
                       <Button 
@@ -171,15 +155,33 @@ export default function TechnicalTasks() {
                         <div className="grid gap-3">
                           {b.technicalServices.map(id => {
                             const s = technicalServices.find(ts => ts.id === id);
+                            const isUnavailable = b.unavailableTechnicalServices?.includes(id);
+                            
                             return s ? (
-                              <div key={id} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-4 shadow-sm group/item hover:border-[#268053] transition-colors">
+                              <div key={id} className={`flex items-center justify-between border rounded-xl p-4 shadow-sm group/item transition-all ${isUnavailable ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200 hover:border-[#268053]'}`}>
                                 <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-[#268053] border border-slate-100 group-hover/item:bg-emerald-50 transition-colors">
+                                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors border ${isUnavailable ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-slate-50 text-[#268053] border-slate-100 group-hover/item:bg-emerald-50'}`}>
                                     {serviceIcons[s.name] || serviceIcons.default}
                                   </div>
-                                  <span className="font-bold text-slate-800">{s.name}</span>
+                                  <div>
+                                    <span className={`font-bold block ${isUnavailable ? 'text-rose-700' : 'text-slate-800'}`}>{s.name}</span>
+                                    {isUnavailable && <span className="text-[10px] font-black uppercase tracking-widest text-rose-500">Not Available</span>}
+                                  </div>
                                 </div>
-                                <span className={`w-3 h-3 rounded-full ${isAck ? 'bg-emerald-400' : 'bg-amber-400'} shadow-sm`}></span>
+                                
+                                <div className="flex items-center gap-3">
+                                  <button 
+                                    onClick={() => toggleTechnicalServiceAvailability(b.id, id)}
+                                    className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-all ${
+                                      isUnavailable 
+                                        ? 'bg-white border-rose-200 text-rose-600 hover:bg-rose-600 hover:text-white' 
+                                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-600'
+                                    }`}
+                                  >
+                                    {isUnavailable ? 'Mark as Available' : 'Set Unavailable'}
+                                  </button>
+                                  <span className={`w-3 h-3 rounded-full ${isUnavailable ? 'bg-rose-400' : (isAck ? 'bg-emerald-400' : 'bg-amber-400')} shadow-sm`}></span>
+                                </div>
                               </div>
                             ) : null;
                           })}

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { 
+import { useState, useEffect, useRef } from 'react';
+import {
   ArrowRight, ChevronLeft, ChevronRight, Building, CheckCircle2, Building2, Users,
-  X, Calendar as CalendarIcon, Clock, User, Mail, Phone, Info, Tag, CalendarCheck, AlertTriangle 
+  X, Calendar as CalendarIcon, Clock, User, Mail, Phone, Info, Tag, CalendarCheck, AlertTriangle,
+  MapPin, Send, ShieldCheck, ArrowUpRight, Globe
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, API_BASE, mapBooking } from '@/lib/app-context';
@@ -9,8 +10,13 @@ import { format, isSameDay, isAfter, isBefore, parseISO } from 'date-fns';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 import { ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import moaLogo from '@/assets/moa-logo.png';
-import heroImage from '@/assets/landing page image.jpg';
 import { Booking } from '@/lib/types';
+
+// Load all images from assets folder except the logo
+const heroModules = import.meta.glob('../assets/*.{png,jpg,jpeg,webp}', { eager: true });
+const HERO_IMAGES = Object.entries(heroModules)
+  .filter(([path]) => !path.toLowerCase().includes('moa-logo.png') && !path.toLowerCase().includes('moa logo.png'))
+  .map(([_, mod]: any) => mod.default);
 
 // Helper to display Gregorian date strings (YYYY-MM-DD) as Ethiopian dates
 const getEthDateString = (gregStr: string) => {
@@ -18,7 +24,7 @@ const getEthDateString = (gregStr: string) => {
   try {
     const [y, m, d] = gregStr.split('-').map(Number);
     // Use noon to avoid timezone slippage
-    const gDate = new Date(y, m - 1, d, 12, 0, 0); 
+    const gDate = new Date(y, m - 1, d, 12, 0, 0);
     const ethDate = EthDateTime.fromEuropeanDate(gDate);
     return `${ETH_MONTHS[ethDate.month - 1]} ${ethDate.date}, ${ethDate.year}`;
   } catch {
@@ -31,7 +37,7 @@ const getFullEthDate = (gregStr: string) => {
   if (!gregStr) return '';
   try {
     const [y, m, d] = gregStr.split('-').map(Number);
-    const gDate = new Date(y, m - 1, d, 12, 0, 0); 
+    const gDate = new Date(y, m - 1, d, 12, 0, 0);
     const ethDate = EthDateTime.fromEuropeanDate(gDate);
     return `${ETH_MONTHS[ethDate.month - 1]} ${ethDate.date}`;
   } catch {
@@ -45,13 +51,13 @@ const formatEthTime = (timeStr: string) => {
   try {
     const [hStr, m] = timeStr.split(':');
     const h = parseInt(hStr, 10);
-    
+
     // Ethiopian Local Time
     // 6 AM is 12:00, 7 AM is 1:00, etc.
     let ethHr = h >= 6 ? h - 6 : h + 6;
     if (ethHr > 12) ethHr -= 12;
     if (ethHr === 0) ethHr = 12;
-    
+
     return `${ethHr}:${m}`;
   } catch {
     return timeStr;
@@ -81,52 +87,95 @@ function EventDetailsModal({ booking, venueName, onClose }: EventDetailsModalPro
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 border border-slate-100 flex flex-col">
         <div className="relative h-32 shrink-0 bg-gradient-to-r from-emerald-600 to-emerald-800 p-8 flex items-end">
-           <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all">
-             <X size={20} />
-           </button>
-           <h2 className="text-2xl font-black text-white uppercase tracking-tight truncate">{booking.eventTitle}</h2>
+          <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all">
+            <X size={20} />
+          </button>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tight truncate">{booking.eventTitle}</h2>
         </div>
         <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar">
-           <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ethiopian Date</p>
-                 <div className="flex items-center gap-2 text-slate-900 font-bold">
-                    <CalendarIcon size={14} className="text-emerald-600" />
-                    <span className="text-sm">{getEthDateString(booking.startDate)}</span>
-                 </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ethiopian Date</p>
+              <div className="flex items-center gap-2 text-slate-900 font-bold">
+                <CalendarIcon size={14} className="text-emerald-600" />
+                <span className="text-sm">{getEthDateString(booking.startDate)}</span>
               </div>
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Time</p>
-                 <div className="flex items-center gap-2 text-slate-900 font-bold">
-                    <Clock size={14} className="text-emerald-600" />
-                    <span className="text-sm">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)} (Local-Time)</span>
-                 </div>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Time</p>
+              <div className="flex items-center gap-2 text-slate-900 font-bold">
+                <Clock size={14} className="text-emerald-600" />
+                <span className="text-sm">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)} (Local-Time)</span>
               </div>
-           </div>
-           
-           <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 flex items-start gap-4">
-              <Building2 size={20} className="text-emerald-600 shrink-0 mt-1" />
-              <div>
-                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Facility Name</p>
-                 <p className="text-base font-black text-slate-900 leading-tight uppercase">{venueName}</p>
-              </div>
-           </div>
+            </div>
+          </div>
 
-           <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Event Summary</p>
-              <p className="text-sm font-medium text-slate-600 leading-relaxed bg-slate-50 p-5 rounded-2xl italic border border-slate-100">
-                 "{booking.eventDescription || 'No detailed description provided for this session.'}"
-              </p>
-           </div>
+          <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 flex items-start gap-4">
+            <Building2 size={20} className="text-emerald-600 shrink-0 mt-1" />
+            <div>
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Facility Name</p>
+              <p className="text-base font-black text-slate-900 leading-tight uppercase">{venueName}</p>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Event Summary</p>
+            <p className="text-sm font-medium text-slate-600 leading-relaxed bg-slate-50 p-5 rounded-2xl italic border border-slate-100">
+              "{booking.eventDescription || 'No detailed description provided for this session.'}"
+            </p>
+          </div>
         </div>
         <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-center">
-           <button onClick={onClose} className="px-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-slate-100 transition-all uppercase tracking-widest">
-             Close Briefing
-           </button>
+          <button onClick={onClose} className="px-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-slate-100 transition-all uppercase tracking-widest">
+            Close Briefing
+          </button>
         </div>
       </div>
     </div>
   );
+}
+
+function Counter({ value, duration = 2500 }: { value: number; duration?: number }) {
+  const [count, setCount] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+  const elementRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (elementRef.current) observer.observe(elementRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
+    let startTime: number | null = null;
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      
+      // Professional Ease-Out Quintic for extreme smoothness
+      const easedProgress = 1 - Math.pow(1 - progress, 5); 
+      
+      setCount(Math.floor(easedProgress * value));
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    requestAnimationFrame(animate);
+  }, [isVisible, value, duration]);
+
+  return <span ref={elementRef}>{count.toLocaleString()}</span>;
 }
 
 interface ScheduleCarouselProps {
@@ -138,12 +187,12 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
   const [index, setIndex] = useState(0);
   const itemsPerPage = 1;
   const totalPages = Math.ceil(bookings.length / itemsPerPage);
-  
+
   const next = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIndex((prev) => (prev + 1) % totalPages);
   };
-  
+
   const prev = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIndex((prev) => (prev - 1 + totalPages) % totalPages);
@@ -164,15 +213,15 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
 
   return (
     <div className="relative group/carousel overflow-hidden">
-      <div 
-        className="flex transition-transform duration-700 ease-out" 
+      <div
+        className="flex transition-transform duration-700 ease-out"
         style={{ transform: `translateX(-${index * 100}%)` }}
       >
         {pages.map((page, pIdx) => (
           <div key={pIdx} className="w-full shrink-0 space-y-2 px-0.5">
             {page.map((b) => (
-              <button 
-                key={b.id} 
+              <button
+                key={b.id}
                 onClick={() => onSelect(b)}
                 className="w-full flex items-center justify-between bg-slate-50/50 px-3 py-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-all active:scale-[0.98] group/item"
               >
@@ -186,28 +235,28 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-3 px-1 relative z-10">
-           <div className="flex gap-1">
-              {[...Array(totalPages)].map((_, i) => (
-                <button
-                  key={i}
-                  onClick={(e) => { e.stopPropagation(); setIndex(i); }}
-                  className={`h-1.5 rounded-full transition-all ${i === index ? 'bg-emerald-500 w-4' : 'bg-slate-200 w-1.5'}`}
-                />
-              ))}
-           </div>
-           <div className="flex gap-2">
-              <button onClick={prev} className="p-1 rounded-lg bg-slate-100 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600 transition-colors shadow-sm">
-                <ChevronLeft size={14} />
-              </button>
-              <button onClick={next} className="p-1 rounded-lg bg-slate-100 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600 transition-colors shadow-sm">
-                <ChevronRight size={14} />
-              </button>
-           </div>
+          <div className="flex gap-1">
+            {[...Array(totalPages)].map((_, i) => (
+              <button
+                key={i}
+                onClick={(e) => { e.stopPropagation(); setIndex(i); }}
+                className={`h-1.5 rounded-full transition-all ${i === index ? 'bg-emerald-500 w-4' : 'bg-slate-200 w-1.5'}`}
+              />
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={prev} className="p-1 rounded-lg bg-slate-100 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600 transition-colors shadow-sm">
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={next} className="p-1 rounded-lg bg-slate-100 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600 transition-colors shadow-sm">
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       )}
-      
+
       {bookings.length > 3 && totalPages === 1 && (
-         <p className="text-[10px] font-bold text-slate-400 text-center mt-2 uppercase tracking-widest">End of schedule</p>
+        <p className="text-[10px] font-bold text-slate-400 text-center mt-2 uppercase tracking-widest">End of schedule</p>
       )}
     </div>
   );
@@ -215,9 +264,18 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { venues, token } = useApp();
+  const { venues, technicalServices, supportServices, token } = useApp();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
+  const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
+
+  useEffect(() => {
+    if (HERO_IMAGES.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentHeroIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 8000); // 8 seconds per slide for a premium slow feel
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const fetchPublicBookings = async () => {
@@ -238,11 +296,11 @@ export default function LandingPage() {
     const now = new Date();
     const todayStr = format(now, 'yyyy-MM-dd');
     const activeBookings = bookings.filter(b => b.venueId === venueId && ACTIVE_STATUSES.includes(b.status));
-    
+
     for (const b of activeBookings) {
       let todayStartTime: string | null = null;
       let todayEndTime: string | null = null;
-      
+
       // Check daily schedules first for multi-day bookings
       if (b.dailySchedules && b.dailySchedules.length > 0) {
         const ds = b.dailySchedules.find(d => d.date === todayStr);
@@ -255,23 +313,23 @@ export default function LandingPage() {
         todayStartTime = b.startTime;
         todayEndTime = b.endTime;
       }
-      
+
       if (todayStartTime && todayEndTime) {
         const startTime = parseISO(`${todayStr}T${todayStartTime}`);
         const endTime = parseISO(`${todayStr}T${todayEndTime}`);
-        
+
         if (isAfter(now, startTime) && isBefore(now, endTime)) {
-          return { 
-            label: `Occupied until ${todayEndTime}`, 
-            color: 'bg-rose-500', 
+          return {
+            label: `Occupied until ${todayEndTime}`,
+            color: 'bg-rose-500',
             textColor: 'text-rose-600',
             bgColor: 'bg-rose-50',
             booking: b
           };
         }
         if (isBefore(now, startTime)) {
-          return { 
-            label: `Booked today at ${todayStartTime}`, 
+          return {
+            label: `Booked today at ${todayStartTime}`,
             color: 'bg-emerald-500',
             textColor: 'text-emerald-700',
             bgColor: 'bg-emerald-50',
@@ -281,8 +339,8 @@ export default function LandingPage() {
       }
     }
 
-    return { 
-      label: 'Available Today', 
+    return {
+      label: 'Available Today',
       color: 'bg-emerald-500',
       textColor: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
@@ -294,10 +352,10 @@ export default function LandingPage() {
     const now = new Date();
     const todayStr = format(now, 'yyyy-MM-dd');
     const nowTimeStr = format(now, 'HH:mm');
-    
+
     const entries: Booking[] = [];
     const activeBookings = bookings.filter(b => b.venueId === venueId && ACTIVE_STATUSES.includes(b.status));
-    
+
     for (const b of activeBookings) {
       if (b.dailySchedules && b.dailySchedules.length > 0) {
         // Expand each daily schedule into a separate entry with correct date & times
@@ -305,7 +363,7 @@ export default function LandingPage() {
           const schedDate = ds.date;
           const sTime = ds.allDay ? '00:00' : (ds.startTime || b.startTime);
           const eTime = ds.allDay ? '23:59' : (ds.endTime || b.endTime);
-          
+
           // Include if it's a future date, or today but hasn't ended yet
           if (schedDate > todayStr || (schedDate === todayStr && eTime > nowTimeStr)) {
             entries.push({
@@ -324,25 +382,41 @@ export default function LandingPage() {
         }
       }
     }
-    
-    return entries.sort((a, b) => 
+
+    return entries.sort((a, b) =>
       a.startDate.localeCompare(b.startDate) || a.startTime.localeCompare(b.startTime)
     );
   };
 
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
     <div className="min-h-screen bg-white font-sans overflow-x-hidden selection:bg-[#268053] selection:text-white">
-      
+
       {activeBooking && (
-        <EventDetailsModal 
-          booking={activeBooking} 
+        <EventDetailsModal
+          booking={activeBooking}
           venueName={venues.find(v => v.id === activeBooking.venueId)?.name}
-          onClose={() => setActiveBooking(null)} 
+          onClose={() => setActiveBooking(null)}
         />
       )}
 
       {/* Top Navigation Bar */}
-      <nav className="bg-white border-b border-slate-100 px-6 py-4 lg:px-12 xl:px-20 w-full sticky top-0 z-50 shadow-sm">
+      <nav 
+        className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 animate-[slide-down_0.8s_cubic-bezier(0.16,1,0.3,1)] ${
+          isScrolled 
+            ? 'bg-white/95 backdrop-blur-md py-3 shadow-lg border-b border-slate-200 px-6 lg:px-12 xl:px-20' 
+            : 'bg-white border-b border-slate-100 py-5 px-6 lg:px-12 xl:px-20'
+        }`}
+      >
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-10">
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
@@ -386,16 +460,38 @@ export default function LandingPage() {
       </nav>
 
       <main>
-        <section className="relative w-full overflow-visible min-h-[550px] pb-24 flex flex-col items-center justify-center text-center">
-          <div className="absolute inset-0 z-0">
-            <img src={heroImage} alt="Professional Conference Hall" className="w-full h-full object-cover grayscale-[0.2]" />
-            <div className="absolute inset-0 bg-[#268053]/70 mix-blend-multiply" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#1b4332]/50 via-[#268053]/20 to-[#0f172a]/80" />
+        <section className="relative w-full overflow-visible min-h-[550px] pt-24 pb-24 flex flex-col items-center justify-center text-center">
+          <div className="absolute inset-0 z-0 overflow-hidden">
+            {HERO_IMAGES.map((img, idx) => (
+              <img 
+                key={img}
+                src={img} 
+                alt={`Professional Conference Hall ${idx + 1}`} 
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[2000ms] ease-in-out ${idx === currentHeroIndex ? 'opacity-100' : 'opacity-0'}`} 
+                style={{ 
+                  animation: idx === currentHeroIndex ? 'zoom-out 20s cubic-bezier(0.16, 1, 0.3, 1) forwards' : 'none'
+                }}
+              />
+            ))}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/50 to-black/95" />
+            
+            {/* Slider Indicators */}
+            {HERO_IMAGES.length > 1 && (
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 flex gap-2">
+                {HERO_IMAGES.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentHeroIndex(idx)}
+                    className={`h-1.5 rounded-full transition-all duration-500 ${idx === currentHeroIndex ? 'bg-emerald-500 w-8' : 'bg-white/30 w-2 hover:bg-white/50'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-          
+
           <div className="relative z-10 max-w-5xl px-6 pt-24 pb-32 flex flex-col items-center">
             <div className="inline-flex items-center gap-3 px-6 py-2.5 bg-white/10 backdrop-blur-lg border border-white/30 rounded-full text-white text-xs font-black uppercase tracking-[0.2em] mb-8 shadow-2xl">
-               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_12px_rgba(52,211,153,1)]"></span> Official Venue Booking Portal
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_12px_rgba(52,211,153,1)]"></span> Official Venue Booking Portal
             </div>
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif font-extrabold text-white leading-[1.15] tracking-tight mb-8 drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
               Ministry of Agriculture<br />Conference Center
@@ -415,15 +511,15 @@ export default function LandingPage() {
 
           <div className="absolute bottom-0 translate-y-1/2 z-20 w-full max-w-5xl px-6 lg:px-12 grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-8 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-4 border-emerald-500/50">
-              <span className="text-white text-4xl font-black mb-2">10</span>
+              <span className="text-white text-4xl font-black mb-2"><Counter value={venues.length} /></span>
               <span className="text-emerald-100/60 text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Venues Available</span>
             </div>
             <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-8 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-4 border-emerald-500/50">
-              <span className="text-white text-4xl font-black mb-2">600+</span>
+              <span className="text-white text-4xl font-black mb-2"><Counter value={venues.reduce((acc, v) => acc + (v.capacity || 0), 0)} />+</span>
               <span className="text-emerald-100/60 text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Max Capacity</span>
             </div>
             <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-8 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-4 border-emerald-500/50">
-              <span className="text-white text-4xl font-black mb-3">23</span>
+              <span className="text-white text-4xl font-black mb-3"><Counter value={technicalServices.length + supportServices.length} /></span>
               <span className="text-emerald-100/60 text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Available Services</span>
             </div>
           </div>
@@ -433,124 +529,124 @@ export default function LandingPage() {
 
         <section className="bg-[#fcfdfd] py-20 lg:py-24 w-full border-t border-slate-100">
           <div className="max-w-[1600px] mx-auto px-6 lg:px-12 xl:px-20">
-             <div className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-8">
-               <div className="max-w-3xl">
-                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full text-[#268053] text-[10px] font-black uppercase tracking-widest mb-6">
-                    <Building2 className="w-3.5 h-3.5" /> Premium Venues
-                 </div>
-                 <h2 className="text-4xl md:text-5xl lg:text-6xl font-serif font-extrabold text-[#111827] tracking-tight leading-tight">
-                    Discover Our Premium <br />
-                    Conference Halls
-                 </h2>
-               </div>
-               <div className="md:text-right">
-                 <p className="text-slate-500 font-medium text-lg max-w-md md:ml-auto leading-relaxed">
-                   Tailored environments designed for high-impact meetings, international summits, and strategic state workshops.
-                 </p>
-               </div>
-             </div>
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-8">
+              <div className="max-w-3xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full text-[#268053] text-[10px] font-black uppercase tracking-widest mb-6">
+                  <Building2 className="w-3.5 h-3.5" /> Premium Venues
+                </div>
+                <h2 className="text-4xl md:text-5xl lg:text-6xl font-serif font-extrabold text-[#111827] tracking-tight leading-tight">
+                  Discover Our Premium <br />
+                  Conference Halls
+                </h2>
+              </div>
+              <div className="md:text-right">
+                <p className="text-slate-500 font-medium text-lg max-w-md md:ml-auto leading-relaxed">
+                  Tailored environments designed for high-impact meetings, international summits, and strategic state workshops.
+                </p>
+              </div>
+            </div>
 
-             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
-               {venues.map((venue, i) => {
-                 const isOutOfOrder = venue.status === 'out_of_order';
-                 
-                 return (
-                   <div key={venue.id} className={`group bg-white rounded-[2rem] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col transition-all duration-500 ease-out relative ${isOutOfOrder ? 'opacity-80 grayscale-[0.5]' : 'hover:shadow-[0_40px_80px_rgba(0,0,0,0.08)] hover:-translate-y-2'}`} style={{ animation: `fade-in-up 0.5s cubic-bezier(0.16,1,0.3,1) ${100 * i}ms both` }}>
-                     <div className="relative aspect-[16/10] rounded-[1.5rem] overflow-hidden mb-8 bg-slate-50">
-                        <img src={venue.image || getVenueImage(venue.type)} alt={venue.name} className={`w-full h-full object-cover transition-transform duration-1000 ease-out ${isOutOfOrder ? '' : 'group-hover:scale-110 grayscale-[0.1] group-hover:grayscale-0'}`} />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        
-                        <div className="absolute top-4 right-4 bg-white/40 backdrop-blur-xl border border-white/40 px-4 py-2 rounded-2xl text-xs font-black text-white shadow-xl z-10">
-                          {venue.price || '0.00'} ETB/hr
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+              {venues.map((venue, i) => {
+                const isOutOfOrder = venue.status === 'out_of_order';
+
+                return (
+                  <div key={venue.id} className={`group bg-white rounded-[2rem] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col transition-all duration-500 ease-out relative ${isOutOfOrder ? 'opacity-80 grayscale-[0.5]' : 'hover:shadow-[0_40px_80px_rgba(0,0,0,0.08)] hover:-translate-y-2'}`} style={{ animation: `fade-in-up 0.5s cubic-bezier(0.16,1,0.3,1) ${100 * i}ms both` }}>
+                    <div className="relative aspect-[16/10] rounded-[1.5rem] overflow-hidden mb-8 bg-slate-50">
+                      <img src={venue.image || getVenueImage(venue.type)} alt={venue.name} className={`w-full h-full object-cover transition-transform duration-1000 ease-out ${isOutOfOrder ? '' : 'group-hover:scale-110 grayscale-[0.1] group-hover:grayscale-0'}`} />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                      <div className="absolute top-4 right-4 bg-white/40 backdrop-blur-xl border border-white/40 px-4 py-2 rounded-2xl text-xs font-black text-white shadow-xl z-10">
+                        {venue.price || '0.00'} ETB/hr
+                      </div>
+
+                      {/* OUT OF ORDER BADGE OVERLAY */}
+                      {isOutOfOrder && (
+                        <div className="absolute inset-0 bg-red-900/60 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+                          <AlertTriangle className="w-12 h-12 text-white mb-2" />
+                          <div className="bg-red-600 text-white text-xs font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-2xl border-2 border-red-500/50">
+                            Currently Out of Order
+                          </div>
+                        </div>
+                      )}
+
+                      {!isOutOfOrder && (
+                        <div className="absolute top-4 left-4 z-10">
+                          {(() => {
+                            const status = getVenueStatus(venue.id);
+                            return (
+                              <button
+                                onClick={() => status.booking && setActiveBooking(status.booking)}
+                                className={`flex items-center gap-2 ${status.bgColor} backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-lg transition-all ${status.booking ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'}`}
+                              >
+                                <span className={`w-2 h-2 rounded-full ${status.color} animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.5)]`}></span>
+                                <span className={`text-[10px] font-black uppercase tracking-wider ${status.textColor}`}>{status.label}</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/30 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider z-10">
+                        <Users className="w-3.5 h-3.5" /> {venue.capacity} Max
+                      </div>
+                    </div>
+
+                    <div className="px-3 flex-1 flex flex-col relative z-30">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className={`text-2xl font-bold tracking-tight transition-colors ${isOutOfOrder ? 'text-slate-400 line-through' : 'text-[#111827] group-hover:text-[#268053]'}`}>{venue.name}</h3>
+                        <div className={`p-2 rounded-xl ${isOutOfOrder ? 'bg-slate-100 text-slate-400' : 'bg-emerald-50 text-[#268053]'}`}>
+                          <Building className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mb-8">
+                        <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-slate-500 text-[10px] font-black uppercase tracking-widest leading-none">
+                          {venue.type}
+                        </span>
+                      </div>
+                      <div className="mt-auto pt-6 border-t border-slate-50">
+                        <div className="flex flex-col mb-6">
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Upcoming Schedule</span>
+
+                          {(() => {
+                            if (isOutOfOrder) return <p className="text-xs font-medium text-slate-400 italic">Schedule unavailable</p>;
+
+                            const upcoming = getUpcomingBookings(venue.id);
+                            if (upcoming.length === 0) {
+                              return <p className="text-xs font-medium text-slate-400 italic">No future bookings scheduled</p>;
+                            }
+                            return (
+                              <ScheduleCarousel
+                                bookings={upcoming}
+                                onSelect={(b) => setActiveBooking(b)}
+                              />
+                            );
+                          })()}
+
+                        </div>
+                        <div className="flex flex-col mb-8">
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-2">Ideal Setting For</span>
+                          <p className="text-sm font-semibold text-slate-600 flex items-center gap-2">
+                            {venue.bestFor}
+                          </p>
                         </div>
 
-                        {/* OUT OF ORDER BADGE OVERLAY */}
-                        {isOutOfOrder && (
-                          <div className="absolute inset-0 bg-red-900/60 backdrop-blur-sm flex flex-col items-center justify-center z-20">
-                            <AlertTriangle className="w-12 h-12 text-white mb-2" />
-                            <div className="bg-red-600 text-white text-xs font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-2xl border-2 border-red-500/50">
-                              Currently Out of Order
-                            </div>
-                          </div>
+                        {/* Disable the booking button if out of order */}
+                        {isOutOfOrder ? (
+                          <button disabled className="w-full py-5 text-sm font-black bg-slate-200 text-slate-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed">
+                            Venue Unavailable
+                          </button>
+                        ) : (
+                          <button onClick={() => { if (token) navigate(`/app#/new-booking?venueId=${venue.id}`); else navigate('/login'); }} className="w-full py-5 text-sm font-black bg-[#111827] text-white hover:bg-[#268053] transition-all duration-300 rounded-2xl shadow-xl flex items-center justify-center gap-2 group/btn">
+                            Book This Venue <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                          </button>
                         )}
-
-                        {!isOutOfOrder && (
-                          <div className="absolute top-4 left-4 z-10">
-                            {(() => {
-                              const status = getVenueStatus(venue.id);
-                              return (
-                                <button 
-                                  onClick={() => status.booking && setActiveBooking(status.booking)}
-                                  className={`flex items-center gap-2 ${status.bgColor} backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-lg transition-all ${status.booking ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'}`}
-                                >
-                                  <span className={`w-2 h-2 rounded-full ${status.color} animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.5)]`}></span>
-                                  <span className={`text-[10px] font-black uppercase tracking-wider ${status.textColor}`}>{status.label}</span>
-                                </button>
-                              );
-                            })()}
-                          </div>
-                        )}
-
-                        <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/30 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider z-10">
-                          <Users className="w-3.5 h-3.5" /> {venue.capacity} Max
-                        </div>
-                     </div>
-
-                     <div className="px-3 flex-1 flex flex-col relative z-30">
-                       <div className="flex items-center justify-between mb-3">
-                         <h3 className={`text-2xl font-bold tracking-tight transition-colors ${isOutOfOrder ? 'text-slate-400 line-through' : 'text-[#111827] group-hover:text-[#268053]'}`}>{venue.name}</h3>
-                         <div className={`p-2 rounded-xl ${isOutOfOrder ? 'bg-slate-100 text-slate-400' : 'bg-emerald-50 text-[#268053]'}`}>
-                           <Building className="w-4 h-4" />
-                         </div>
-                       </div>
-                       <div className="flex items-center gap-2 mb-8">
-                         <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-slate-500 text-[10px] font-black uppercase tracking-widest leading-none">
-                           {venue.type}
-                         </span>
-                       </div>
-                        <div className="mt-auto pt-6 border-t border-slate-50">
-                          <div className="flex flex-col mb-6">
-                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Upcoming Schedule</span>
-                            
-                            {(() => {
-                                if (isOutOfOrder) return <p className="text-xs font-medium text-slate-400 italic">Schedule unavailable</p>;
-                                
-                                const upcoming = getUpcomingBookings(venue.id);
-                                if (upcoming.length === 0) {
-                                  return <p className="text-xs font-medium text-slate-400 italic">No future bookings scheduled</p>;
-                                }
-                                return (
-                                  <ScheduleCarousel 
-                                    bookings={upcoming} 
-                                    onSelect={(b) => setActiveBooking(b)} 
-                                  />
-                                );
-                            })()}
-
-                          </div>
-                          <div className="flex flex-col mb-8">
-                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-2">Ideal Setting For</span>
-                            <p className="text-sm font-semibold text-slate-600 flex items-center gap-2">
-                              {venue.bestFor}
-                            </p>
-                          </div>
-                          
-                          {/* Disable the booking button if out of order */}
-                          {isOutOfOrder ? (
-                            <button disabled className="w-full py-5 text-sm font-black bg-slate-200 text-slate-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed">
-                               Venue Unavailable
-                            </button>
-                          ) : (
-                            <button onClick={() => { if (token) navigate(`/app#/new-booking?venueId=${venue.id}`); else navigate('/login'); }} className="w-full py-5 text-sm font-black bg-[#111827] text-white hover:bg-[#268053] transition-all duration-300 rounded-2xl shadow-xl flex items-center justify-center gap-2 group/btn">
-                               Book This Venue <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                            </button>
-                          )}
-                        </div>
-                     </div>
-                   </div>
-                 );
-               })}
-             </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
 
@@ -568,9 +664,9 @@ export default function LandingPage() {
                 { step: '04', title: 'Confirmation', desc: 'Receive instant updates as your booking is reviewed and confirmed by management.' },
               ].map((item, i) => (
                 <div key={i} className="relative group p-8 rounded-[2rem] bg-slate-50 border border-slate-100 hover:bg-[#268053] hover:border-[#268053] transition-all duration-500">
-                   <span className="text-4xl font-black text-emerald-100/50 group-hover:text-white/20 transition-colors absolute top-6 right-8">{item.step}</span>
-                   <h4 className="text-xl font-bold text-[#111827] group-hover:text-white mb-3 mt-4">{item.title}</h4>
-                   <p className="text-slate-500 group-hover:text-white/80 text-sm font-medium leading-relaxed">{item.desc}</p>
+                  <span className="text-4xl font-black text-emerald-100/50 group-hover:text-white/20 transition-colors absolute top-6 right-8">{item.step}</span>
+                  <h4 className="text-xl font-bold text-[#111827] group-hover:text-white mb-3 mt-4">{item.title}</h4>
+                  <p className="text-slate-500 group-hover:text-white/80 text-sm font-medium leading-relaxed">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -607,6 +703,7 @@ export default function LandingPage() {
         </section>
       </main>
 
+
       <footer className="bg-[#0f172a] text-white pt-20 pb-12 px-6 lg:px-12 xl:px-20 mt-0">
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-4 gap-12 pb-20 border-b border-white/10 mb-20">
@@ -628,27 +725,27 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex flex-col md:flex-row justify-between gap-12 pb-12">
-             <div className="max-w-sm">
-               <div className="flex items-center gap-4 mb-6">
-                 <div className="w-12 h-12 flex items-center justify-center shrink-0">
-                   <img src={moaLogo} alt="MoA Logo" className="w-full h-full object-contain grayscale brightness-200" />
-                 </div>
-                 <h3 className="text-xl font-bold tracking-tight text-white leading-none">MoA Conference Center</h3>
-               </div>
-               <p className="text-slate-400 text-sm leading-relaxed font-medium">Providing world-class infrastructure for the Ministry of Agriculture of Ethiopia. Digital transformation powered by UNOPS.</p>
-             </div>
-             <div className="flex items-center gap-6">
-                <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Privacy Policy</a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Terms of Service</a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Accessibility</a>
-             </div>
+            <div className="max-w-sm">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 flex items-center justify-center shrink-0">
+                  <img src={moaLogo} alt="MoA Logo" className="w-full h-full object-contain grayscale brightness-200" />
+                </div>
+                <h3 className="text-xl font-bold tracking-tight text-white leading-none">MoA Conference Center</h3>
+              </div>
+              <p className="text-slate-400 text-sm leading-relaxed font-medium">Providing world-class infrastructure for the Ministry of Agriculture of Ethiopia. Digital transformation powered by UNOPS.</p>
+            </div>
+            <div className="flex items-center gap-6">
+              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Privacy Policy</a>
+              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Terms of Service</a>
+              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Accessibility</a>
+            </div>
           </div>
           <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
-             <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">© {new Date().getFullYear()} MoA Ethiopia. All rights reserved.</p>
-             <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Status: Operational</span>
-             </div>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">© {new Date().getFullYear()} MoA Ethiopia. All rights reserved.</p>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Status: Operational</span>
+            </div>
           </div>
         </div>
       </footer>

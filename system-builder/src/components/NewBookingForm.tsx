@@ -49,6 +49,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   }, [user]);
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getEthDateString = (gregStr: string) => {
     if (!gregStr) return '';
@@ -64,12 +65,10 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
   // --- NEW: Smart logic to check if a service is ALREADY included in the venue ---
   const isServiceIncluded = (type: 'technicalServices' | 'supportServices', serviceId: string) => {
-    if (!selectedVenue) return false;
+    if (!selectedVenue || type === 'supportServices') return false;
     
     // Check both camelCase and snake_case just in case your backend uses either
-    const includedIds = type === 'technicalServices'
-      ? (selectedVenue.technicalServices || selectedVenue.technical_services || selectedVenue.includedServices || selectedVenue.included_services || [])
-      : (selectedVenue.supportServices || selectedVenue.support_services || selectedVenue.includedServices || selectedVenue.included_services || []);
+    const includedIds = (selectedVenue.technicalServices || selectedVenue.technical_services || selectedVenue.includedServices || selectedVenue.included_services || []);
       
     return includedIds.map(String).includes(String(serviceId));
   };
@@ -205,6 +204,8 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   });
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const finalTotal = venueTotal + serviceFee;
 
@@ -247,7 +248,9 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
       const data = await addBooking(payload);
       setSubmittedBookingId(data.id || 'SUCCESS');
     } catch { 
-      toast.error('Submit failed'); 
+      toast.error('Submit failed. Please try again.'); 
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -560,7 +563,18 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
               
               <div className="mt-12 flex justify-between pt-6 border-t border-slate-100">
                 <button onClick={() => setCurrentStep(3)} className="font-black text-slate-400 hover:text-slate-600 uppercase text-xs tracking-widest transition-colors">Back</button>
-                <Button onClick={handleSubmit} className="px-16 h-16 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white text-lg rounded-2xl font-black shadow-2xl shadow-emerald-900/30 uppercase tracking-widest transition-all hover:-translate-y-1 hover:scale-105 active:scale-95">SUBMIT REQUEST</Button>
+                <Button 
+                  onClick={handleSubmit} 
+                  disabled={isSubmitting}
+                  className="px-16 h-16 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white text-lg rounded-2xl font-black shadow-2xl shadow-emerald-900/30 uppercase tracking-widest transition-all hover:-translate-y-1 hover:scale-105 active:scale-95 disabled:opacity-75 disabled:pointer-events-none disabled:hover:translate-y-0 disabled:hover:scale-100 disabled:from-[#268053] disabled:to-[#268053]"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-3">
+                      <div className="w-5 h-5 border-[3px] border-white/30 border-t-white rounded-full animate-spin" />
+                      SUBMITTING...
+                    </span>
+                  ) : 'SUBMIT REQUEST'}
+                </Button>
               </div>
             </div>
           )}

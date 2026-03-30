@@ -77,6 +77,13 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     }
   }, [form.startDate, form.endDate]);
 
+  // Service inclusion logic (Matches NewBookingForm)
+  const isServiceIncluded = (type: 'technicalServices' | 'supportServices', serviceId: string) => {
+    if (!selectedVenue || type === 'supportServices') return false;
+    const includedIds = (selectedVenue.technicalServices || selectedVenue.technical_services || selectedVenue.includedServices || selectedVenue.included_services || []);
+    return includedIds.map(String).includes(String(serviceId));
+  };
+
   // NEW: Daily Cleaning Logic (06:00 - 08:00)
   const hasCleaningConflict = useMemo(() => {
     return form.dailySchedules.some(s => {
@@ -311,11 +318,44 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
 
         {currentStep === 3 && (
           <div className="space-y-6 animate-in fade-in">
-             <h2 className="text-xl font-black text-slate-800 mb-6 pb-4 border-b border-slate-100">VIP Services</h2>
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {technicalServices.map(s => (
-                  <div key={s.id} onClick={() => toggleService('technicalServices', s.id)} className={`p-3 rounded-xl border-2 cursor-pointer transition-colors ${form.technicalServices.includes(s.id) ? 'border-purple-600 bg-purple-50' : 'border-slate-100'}`}>
-                     <p className="text-xs font-bold text-slate-700">{s.name}</p>
+                {technicalServices.map(s => {
+                  const isIncluded = isServiceIncluded('technicalServices', s.id);
+                  const isSelected = form.technicalServices.includes(s.id);
+                  
+                  return (
+                    <div 
+                      key={s.id} 
+                      onClick={() => !isIncluded && toggleService('technicalServices', s.id)} 
+                      className={`p-4 rounded-2xl border-2 transition-all duration-300 ${
+                        isIncluded 
+                          ? 'border-emerald-200 bg-emerald-50/40 opacity-90 cursor-not-allowed'
+                          : isSelected 
+                            ? 'border-purple-600 bg-purple-50 shadow-md scale-[1.02] cursor-pointer' 
+                            : 'border-slate-100 hover:border-purple-200 hover:bg-slate-50 cursor-pointer'
+                      }`}
+                    >
+                      <p className={`text-xs font-black uppercase tracking-tight py-1 ${isIncluded || isSelected ? 'text-purple-900' : 'text-slate-600'}`}>
+                        {s.name}
+                      </p>
+                      {isIncluded ? (
+                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mt-1 flex items-center gap-1">
+                          Included in Hall
+                        </p>
+                      ) : (
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">ETB {s.price}</p>
+                      )}
+                    </div>
+                  );
+                })}
+             </div>
+
+             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-8 mb-4">Hospitality Services</h3>
+             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {supportServices.map(s => (
+                  <div key={s.id} onClick={() => toggleService('supportServices', s.id)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${form.supportServices.includes(s.id) ? 'border-amber-600 bg-amber-50 shadow-md scale-[1.02]' : 'border-slate-100 hover:border-amber-200 hover:bg-slate-50'}`}>
+                     <p className={`text-xs font-black uppercase tracking-tight py-1 ${form.supportServices.includes(s.id) ? 'text-amber-900' : 'text-slate-600'}`}>{s.name}</p>
+                     <p className="text-[10px] font-bold text-slate-400 mt-1">ETB {s.price}</p>
                   </div>
                 ))}
              </div>

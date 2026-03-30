@@ -17,8 +17,9 @@ import {
   Home,
   Monitor,
   UtensilsCrossed,
-  Users,
-  Star
+  Star,
+  CheckCircle2,
+  Users
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import moaLogo from '@/assets/moa-logo.png';
@@ -62,8 +63,61 @@ interface AppShellProps {
 }
 
 export default function AppShell({ currentPage, onNavigate, children }: AppShellProps) {
-  const { role, user, logout, token } = useApp();
+  const { role, user, logout, token, bookings = [] } = useApp();
   const [collapsed, setCollapsed] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const notifications = React.useMemo(() => {
+    if (!token || !user) return [];
+    const notifs = [];
+    
+    if (['organizer', 'leadership'].includes(role)) {
+       const myBookings = bookings.filter((b: any) => b.organizerEmail === user.email || String(b.user) === String(user.id) || b.organizer_email === user.email);
+       const recentlyApproved = myBookings.filter((b: any) => b.status === 'approved');
+       const recentlyRejected = myBookings.filter((b: any) => ['rejected', 'cancelled'].includes(b.status));
+       
+       recentlyApproved.forEach((b: any) => notifs.push({ id: b.id, title: 'Booking Approved', message: `Your request for ${b.eventTitle || b.event_title || 'Event'} was approved. Awaiting payment.`, time: 'New', type: 'success' }));
+       recentlyRejected.forEach((b: any) => notifs.push({ id: b.id, title: 'Booking Cancelled/Rejected', message: `Your request for ${b.eventTitle || b.event_title || 'Event'} was not approved.`, time: 'Update', type: 'error' }));
+    }
+    
+    if (['event_management', 'admin_finance', 'system_admin'].includes(role)) {
+       const pendingCount = bookings.filter((b: any) => b.status === 'reserved').length;
+       if (pendingCount > 0) {
+         notifs.push({ id: 'pending-admin', title: 'Pending Approvals', message: `You have ${pendingCount} new venue requests pending review right now.`, time: 'Action Required', type: 'warning' });
+       }
+       
+       const overrideCount = bookings.filter((b: any) => b.status === 'override').length;
+       if (overrideCount > 0) {
+         notifs.push({ id: 'override-admin', title: 'VIP Overrides', message: `${overrideCount} VIP bookings require your attention.`, time: 'High Priority', type: 'error' });
+       }
+
+       const cancelledCount = bookings.filter((b: any) => b.status === 'cancelled').length;
+       if (cancelledCount > 0) {
+         notifs.push({ id: 'cancelled-admin', title: 'Recent Cancellations', message: `${cancelledCount} bookings were recently cancelled.`, time: 'Update', type: 'error' });
+       }
+       
+       const upcomingCount = bookings.filter((b: any) => ['confirmed', 'approved'].includes(b.status) && new Date(b.startDate || b.start_date) >= new Date()).length;
+       if (upcomingCount > 0) {
+         notifs.push({ id: 'upcoming-admin', title: 'Upcoming Events', message: `${upcomingCount} confirmed/approved upcoming events are in the schedule.`, time: 'Operational', type: 'success' });
+       }
+    }
+
+    if (role === 'ict_admin') {
+       const unassignedTech = bookings.filter((b: any) => (b.technicalServices?.length > 0 || b.technical_services?.length > 0) && ['confirmed', 'approved'].includes(b.status)).length;
+       if (unassignedTech > 0) {
+         notifs.push({ id: 'tech-admin', title: 'Technical Tasks', message: `${unassignedTech} upcoming events require ICT/AV setup.`, time: 'Action Required', type: 'warning' });
+       }
+    }
+
+    if (role === 'catering_support') {
+       const unassignedSupport = bookings.filter((b: any) => (b.supportServices?.length > 0 || b.support_services?.length > 0) && ['confirmed', 'approved'].includes(b.status)).length;
+       if (unassignedSupport > 0) {
+         notifs.push({ id: 'catering-admin', title: 'Catering Tasks', message: `${unassignedSupport} upcoming events require catering services.`, time: 'Action Required', type: 'warning' });
+       }
+    }
+
+    return notifs;
+  }, [bookings, role, user, token]);
 
   const filteredNav = navItems.filter(item => {
     if (!token && item.id === 'my-bookings') return false;
@@ -166,10 +220,52 @@ export default function AppShell({ currentPage, onNavigate, children }: AppShell
           </div>
           <div className="flex items-center gap-4">
              {token && (
-               <button className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-100 text-slate-500 transition-colors relative">
-                 <Bell size={20} />
-                 <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 border-2 border-white"></span>
-               </button>
+               <div className="relative">
+                 <button 
+                   onClick={() => setShowNotifications(!showNotifications)}
+                   className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-slate-100 text-slate-500 transition-colors relative"
+                 >
+                   <Bell size={20} />
+                   {notifications.length > 0 && (
+                     <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 border-2 border-white animate-pulse"></span>
+                   )}
+                 </button>
+                 
+                 {/* NOTIFICATION OVERLAY */}
+                 {showNotifications && (
+                   <>
+                     <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
+                     <div className="absolute top-12 right-0 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-4">
+                       <div className="px-5 py-4 bg-[#f8fafc] border-b border-slate-100 flex justify-between items-center">
+                         <span className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Bell size={14} className="text-[#268053]" /> Notifications</span>
+                         <span className="text-[9px] font-black uppercase text-white bg-[#268053] px-2.5 py-1 rounded-full">{notifications.length} New</span>
+                       </div>
+                       <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                         {notifications.length === 0 ? (
+                           <div className="p-8 text-center flex flex-col items-center">
+                             <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                                <CheckCircle2 className="w-6 h-6 text-slate-300" />
+                             </div>
+                             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                               You're all caught up!
+                             </p>
+                           </div>
+                         ) : (
+                           notifications.map((n, i) => (
+                             <div key={`${n.id}-${i}`} className="p-4 border-b border-slate-50 hover:bg-slate-50 transition-all cursor-pointer group">
+                               <div className="flex justify-between items-start mb-1.5">
+                                 <span className={`text-[10px] font-black uppercase tracking-widest ${n.type === 'error' ? 'text-rose-500' : n.type === 'success' ? 'text-emerald-500' : 'text-amber-500'}`}>{n.title}</span>
+                                 <span className="text-[9px] font-black uppercase text-slate-300 group-hover:text-slate-400 transition-colors">{n.time}</span>
+                               </div>
+                               <p className="text-xs font-semibold text-slate-600 leading-snug group-hover:text-slate-900 transition-colors">{n.message}</p>
+                             </div>
+                           ))
+                         )}
+                       </div>
+                     </div>
+                   </>
+                 )}
+               </div>
              )}
              <Link 
                to="/"
