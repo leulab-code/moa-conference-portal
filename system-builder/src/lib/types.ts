@@ -20,6 +20,8 @@ export interface Venue {
   capacity: number | null;
   bestFor: string;
   price: number | null;
+  status: 'vacant' | 'out_of_order';
+  included_services: string[];
   image?: string | null;
 }
 

@@ -6,9 +6,57 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useApp, API_BASE, mapBooking } from '@/lib/app-context';
 import { format, isSameDay, isAfter, isBefore, parseISO } from 'date-fns';
+import { EthDateTime } from 'ethiopian-calendar-date-converter';
+import { ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import moaLogo from '@/assets/moa-logo.png';
 import heroImage from '@/assets/landing page image.jpg';
 import { Booking } from '@/lib/types';
+
+// Helper to display Gregorian date strings (YYYY-MM-DD) as Ethiopian dates
+const getEthDateString = (gregStr: string) => {
+  if (!gregStr) return '';
+  try {
+    const [y, m, d] = gregStr.split('-').map(Number);
+    // Use noon to avoid timezone slippage
+    const gDate = new Date(y, m - 1, d, 12, 0, 0); 
+    const ethDate = EthDateTime.fromEuropeanDate(gDate);
+    return `${ETH_MONTHS[ethDate.month - 1]} ${ethDate.date}, ${ethDate.year}`;
+  } catch {
+    return gregStr;
+  }
+};
+
+// Simple helper for full Ethiopian date (e.g. "Meskerem 1")
+const getFullEthDate = (gregStr: string) => {
+  if (!gregStr) return '';
+  try {
+    const [y, m, d] = gregStr.split('-').map(Number);
+    const gDate = new Date(y, m - 1, d, 12, 0, 0); 
+    const ethDate = EthDateTime.fromEuropeanDate(gDate);
+    return `${ETH_MONTHS[ethDate.month - 1]} ${ethDate.date}`;
+  } catch {
+    return gregStr;
+  }
+};
+
+// Helper: 24h to strictly Ethiopian Local Time (6 hours difference)
+const formatEthTime = (timeStr: string) => {
+  if (!timeStr) return '';
+  try {
+    const [hStr, m] = timeStr.split(':');
+    const h = parseInt(hStr, 10);
+    
+    // Ethiopian Local Time
+    // 6 AM is 12:00, 7 AM is 1:00, etc.
+    let ethHr = h >= 6 ? h - 6 : h + 6;
+    if (ethHr > 12) ethHr -= 12;
+    if (ethHr === 0) ethHr = 12;
+    
+    return `${ethHr}:${m}`;
+  } catch {
+    return timeStr;
+  }
+};
 
 // Abstract images for different venue types
 const getVenueImage = (type: string) => {
@@ -41,17 +89,17 @@ function EventDetailsModal({ booking, venueName, onClose }: EventDetailsModalPro
         <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar">
            <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Date</p>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ethiopian Date</p>
                  <div className="flex items-center gap-2 text-slate-900 font-bold">
                     <CalendarIcon size={14} className="text-emerald-600" />
-                    <span className="text-sm">{format(parseISO(booking.startDate), 'MMM do, yyyy')}</span>
+                    <span className="text-sm">{getEthDateString(booking.startDate)}</span>
                  </div>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Time</p>
                  <div className="flex items-center gap-2 text-slate-900 font-bold">
                     <Clock size={14} className="text-emerald-600" />
-                    <span className="text-sm">{booking.startTime} - {booking.endTime}</span>
+                    <span className="text-sm">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)} (Local-Time)</span>
                  </div>
               </div>
            </div>
@@ -128,8 +176,8 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
                 onClick={() => onSelect(b)}
                 className="w-full flex items-center justify-between bg-slate-50/50 px-3 py-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-all active:scale-[0.98] group/item"
               >
-                <span className="text-xs font-bold text-slate-700 group-hover/item:text-emerald-700">{format(parseISO(b.startDate), 'MMM d')}</span>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight group-hover/item:text-emerald-600">{b.startTime} - {b.endTime}</span>
+                <span className="text-xs font-bold text-slate-700 group-hover/item:text-emerald-700">{getFullEthDate(b.startDate)}</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight group-hover/item:text-emerald-600">{formatEthTime(b.startTime)} - {formatEthTime(b.endTime)} (Local-Time)</span>
               </button>
             ))}
           </div>
@@ -184,31 +232,53 @@ export default function LandingPage() {
     fetchPublicBookings();
   }, []);
 
+  const ACTIVE_STATUSES = ['confirmed', 'approved', 'reserved', 'override'];
+
   const getVenueStatus = (venueId: string) => {
     const now = new Date();
-    const activeBookings = bookings.filter(b => b.venueId === venueId && b.status === 'confirmed');
-    const todayBooking = activeBookings.find(b => isSameDay(parseISO(b.startDate), now));
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const activeBookings = bookings.filter(b => b.venueId === venueId && ACTIVE_STATUSES.includes(b.status));
     
-    if (todayBooking) {
-      const startTime = parseISO(`${todayBooking.startDate}T${todayBooking.startTime}`);
-      const endTime = parseISO(`${todayBooking.endDate}T${todayBooking.endTime}`);
+    for (const b of activeBookings) {
+      let todayStartTime: string | null = null;
+      let todayEndTime: string | null = null;
       
-      if (isAfter(now, startTime) && isBefore(now, endTime)) {
-        return { 
-          label: `Occupied until ${todayBooking.endTime}`, 
-          color: 'bg-rose-500', 
-          textColor: 'text-rose-600',
-          bgColor: 'bg-rose-50',
-          booking: todayBooking
-        };
+      // Check daily schedules first for multi-day bookings
+      if (b.dailySchedules && b.dailySchedules.length > 0) {
+        const ds = b.dailySchedules.find(d => d.date === todayStr);
+        if (ds) {
+          todayStartTime = ds.allDay ? '00:00' : (ds.startTime || b.startTime);
+          todayEndTime = ds.allDay ? '23:59' : (ds.endTime || b.endTime);
+        }
+      } else if (b.startDate <= todayStr && b.endDate >= todayStr) {
+        // Fallback: check if today falls within the booking's date range
+        todayStartTime = b.startTime;
+        todayEndTime = b.endTime;
       }
-      return { 
-        label: `Booked today at ${todayBooking.startTime}`, 
-        color: 'bg-emerald-500',
-        textColor: 'text-emerald-700',
-        bgColor: 'bg-emerald-50',
-        booking: todayBooking
-      };
+      
+      if (todayStartTime && todayEndTime) {
+        const startTime = parseISO(`${todayStr}T${todayStartTime}`);
+        const endTime = parseISO(`${todayStr}T${todayEndTime}`);
+        
+        if (isAfter(now, startTime) && isBefore(now, endTime)) {
+          return { 
+            label: `Occupied until ${todayEndTime}`, 
+            color: 'bg-rose-500', 
+            textColor: 'text-rose-600',
+            bgColor: 'bg-rose-50',
+            booking: b
+          };
+        }
+        if (isBefore(now, startTime)) {
+          return { 
+            label: `Booked today at ${todayStartTime}`, 
+            color: 'bg-emerald-500',
+            textColor: 'text-emerald-700',
+            bgColor: 'bg-emerald-50',
+            booking: b
+          };
+        }
+      }
     }
 
     return { 
@@ -222,9 +292,42 @@ export default function LandingPage() {
 
   const getUpcomingBookings = (venueId: string) => {
     const now = new Date();
-    return bookings
-      .filter(b => b.venueId === venueId && b.status === 'confirmed' && isAfter(parseISO(b.startDate), now))
-      .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const nowTimeStr = format(now, 'HH:mm');
+    
+    const entries: Booking[] = [];
+    const activeBookings = bookings.filter(b => b.venueId === venueId && ACTIVE_STATUSES.includes(b.status));
+    
+    for (const b of activeBookings) {
+      if (b.dailySchedules && b.dailySchedules.length > 0) {
+        // Expand each daily schedule into a separate entry with correct date & times
+        for (const ds of b.dailySchedules) {
+          const schedDate = ds.date;
+          const sTime = ds.allDay ? '00:00' : (ds.startTime || b.startTime);
+          const eTime = ds.allDay ? '23:59' : (ds.endTime || b.endTime);
+          
+          // Include if it's a future date, or today but hasn't ended yet
+          if (schedDate > todayStr || (schedDate === todayStr && eTime > nowTimeStr)) {
+            entries.push({
+              ...b,
+              startDate: schedDate,
+              endDate: schedDate,
+              startTime: sTime,
+              endTime: eTime,
+            });
+          }
+        }
+      } else {
+        // Single-day or legacy booking without daily schedules
+        if (b.endDate > todayStr || (b.endDate === todayStr && b.endTime > nowTimeStr)) {
+          entries.push(b);
+        }
+      }
+    }
+    
+    return entries.sort((a, b) => 
+      a.startDate.localeCompare(b.startDate) || a.startTime.localeCompare(b.startTime)
+    );
   };
 
   return (
@@ -260,7 +363,7 @@ export default function LandingPage() {
             <a href="#/my-bookings" onClick={(e) => { e.preventDefault(); if (token) navigate('/app#/my-bookings'); else navigate('/login'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">My Bookings</a>
             <a href="#/calendar" onClick={(e) => { e.preventDefault(); navigate('/app#/calendar'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Calendar</a>
             <a href="#/manage-bookings" onClick={(e) => { e.preventDefault(); if (token) navigate('/app#/manage-bookings'); else navigate('/login'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Admin Panel</a>
-            <a href="#" className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Reports</a>
+
           </div>
 
           <div className="flex items-center gap-4 h-full">
