@@ -16,6 +16,12 @@ const steps = [
   { num: 4, label: 'FINISH' },
 ];
 
+const timeToMinutes = (timeStr: string | undefined) => {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
 export default function VIPBookingForm({ onComplete }: { onComplete: () => void }) {
   const navigate = useNavigate();
   const { user, bookings, venues, addBooking, refreshData, technicalServices, supportServices, servicePrices } = useApp();
@@ -59,6 +65,71 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     return dates;
   }, [bookings, form.venueId]);
 
+  // Use the same existing schedules logic from normal form to calculate gaps
+  const existingSchedules = useMemo(() => {
+    if (!form.venueId) return [];
+    const vBookings = bookings?.filter(b => 
+      b.venueId?.toString() === form.venueId?.toString() && 
+      ['reserved', 'approved', 'confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '')
+    );
+    
+    const schedules: { date: string, start: string, end: string, isHard: boolean }[] = [];
+    vBookings?.forEach(b => {
+      const isHard = ['confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '');
+      
+      if (b.dailySchedules && b.dailySchedules.length > 0) {
+        b.dailySchedules.forEach((ds: any) => schedules.push({ date: ds.date, start: ds.startTime, end: ds.endTime, isHard }));
+      } else if (b.startDate && b.endDate) {
+        try {
+          const s = parseISO(b.startDate), e = parseISO(b.endDate);
+          if (s <= e) eachDayOfInterval({start: s, end: e}).forEach(d => {
+            schedules.push({ date: format(d, 'yyyy-MM-dd'), start: b.startTime || '01:00', end: b.endTime || '12:00', isHard });
+          });
+        } catch {}
+      }
+    });
+    return schedules;
+  }, [bookings, form.venueId]);
+
+  // NEW: Updated 1-hour cleaning logic
+  const dailyConflicts = useMemo(() => {
+    const issues: { date: string, type: 'hard_overlap' | 'soft_overlap' | 'cleaning', msg: string }[] = [];
+    
+    form.dailySchedules?.forEach(newSched => {
+      const dayExisting = existingSchedules.filter(ex => ex.date === newSched.date);
+      
+      const nStart = timeToMinutes(newSched.startTime || '01:00');
+      const nEnd = timeToMinutes(newSched.endTime || '12:00');
+      
+      let hasHard = false;
+      let hasSoft = false;
+      let cleanMsg = '';
+
+      dayExisting.forEach(ex => {
+        const eStart = timeToMinutes(ex.start);
+        const eEnd = timeToMinutes(ex.end);
+        
+        if (nStart < eEnd && nEnd > eStart) {
+          if (ex.isHard) hasHard = true;
+          else hasSoft = true;
+        } else {
+          const gapAfter = nStart - eEnd;
+          const gapBefore = eStart - nEnd;
+          if (gapAfter >= 0 && gapAfter < 60) cleanMsg = `1-Hour Cleaning Gap required after ${ex.end}`;
+          else if (gapBefore >= 0 && gapBefore < 60) cleanMsg = `1-Hour Cleaning Gap required before ${ex.start}`;
+        }
+      });
+
+      // VIPs overwrite soft overlaps, but we still warn them about Hard overlaps and Cleaning
+      if (hasHard || (newSched.allDay && dayExisting.some(ex => ex.isHard))) {
+         issues.push({ date: newSched.date, type: 'hard_overlap', msg: 'Unavailable (Already Confirmed/Paid)' });
+      } else if (cleanMsg) {
+         issues.push({ date: newSched.date, type: 'cleaning', msg: cleanMsg });
+      }
+    });
+    return issues;
+  }, [form.dailySchedules, existingSchedules]);
+
   useEffect(() => {
     if (form.startDate && form.endDate && form.endDate >= form.startDate) {
       const dates = [];
@@ -71,27 +142,17 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
         currentDate.setDate(currentDate.getDate() + 1);
       }
       setForm(prev => {
-        const newSchedules = dates.map(d => prev.dailySchedules.find(s => s.date === d) || { date: d, startTime: '08:00', endTime: '12:00', allDay: false });
+        const newSchedules = dates.map(d => prev.dailySchedules.find(s => s.date === d) || { date: d, startTime: '01:00', endTime: '12:00', allDay: false });
         return { ...prev, dailySchedules: newSchedules };
       });
     }
   }, [form.startDate, form.endDate]);
 
-  // Service inclusion logic (Matches NewBookingForm)
   const isServiceIncluded = (type: 'technicalServices' | 'supportServices', serviceId: string) => {
     if (!selectedVenue || type === 'supportServices') return false;
     const includedIds = (selectedVenue.technicalServices || selectedVenue.technical_services || selectedVenue.includedServices || selectedVenue.included_services || []);
     return includedIds.map(String).includes(String(serviceId));
   };
-
-  // NEW: Daily Cleaning Logic (06:00 - 08:00)
-  const hasCleaningConflict = useMemo(() => {
-    return form.dailySchedules.some(s => {
-      const start = s.startTime.substring(0, 5);
-      const end = s.endTime.substring(0, 5);
-      return start < '08:00' && end > '06:00';
-    });
-  }, [form.dailySchedules]);
 
   const serviceFee = useMemo(() => {
     return [...form.technicalServices, ...form.supportServices].reduce((sum, id) => sum + (servicePrices[[...technicalServices, ...supportServices].find(x => x.id === id)?.name || ''] || 0), 0);
@@ -157,9 +218,10 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     });
   };
 
-  const generateHourOptions = () => Array.from({ length: 24 }, (_, i) => {
-    const formatted = i.toString().padStart(2, '0') + ':00';
-    return <option key={formatted} value={formatted}>{formatted}</option>;
+  // NEW: Updated to match normal form (13 hours)
+  const generateHourOptions = () => Array.from({ length: 13 }, (_, i) => {
+    const h = (i).toString().padStart(2, '0') + ':00'; 
+    return <option key={h} value={h}>{h}</option>;
   });
 
   const inputClass = (field: string) => `w-full text-sm border rounded-lg px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${errors[field] ? 'border-red-300 ring-4 ring-red-50' : 'border-slate-200'}`;
@@ -276,21 +338,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
                </div>
             </div>
 
-            {/* NEW: Daily Cleaning Notice */}
-            {hasCleaningConflict && (
-              <div className="bg-amber-50 text-amber-800 p-5 rounded-2xl border border-amber-200 flex items-start gap-4 mt-4 animate-in fade-in zoom-in-95 duration-300">
-                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 shadow-sm">
-                  <Info className="w-6 h-6 text-amber-600" />
-                </div>
-                <div>
-                  <h4 className="font-black text-sm mb-1 uppercase tracking-wider text-amber-900">Mandatory Cleaning Time</h4>
-                  <p className="text-sm font-medium opacity-90 leading-relaxed">
-                    This venue undergoes daily cleaning operations from <strong className="font-black">06:00 to 08:00</strong>. Your selected time overlaps with this block. Please note that cleaning staff will be on site.
-                  </p>
-                </div>
-              </div>
-            )}
-
             {clashWarning && (
               <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 flex gap-3">
                 <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -298,16 +345,30 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
               </div>
             )}
 
-            {form.dailySchedules.map((schedule, idx) => (
-              <div key={schedule.date} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-100 p-4 rounded-xl bg-slate-50">
-                <span className="font-bold text-sm text-slate-700">{getEthDateString(schedule.date)}</span>
-                <div className="flex items-center gap-2">
-                  <select value={schedule.startTime.substring(0, 5)} onChange={e => updateSchedule(idx, 'startTime', e.target.value)} className="bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold">{generateHourOptions()}</select>
-                  <span>to</span>
-                  <select value={schedule.endTime.substring(0, 5)} onChange={e => updateSchedule(idx, 'endTime', e.target.value)} className="bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold">{generateHourOptions()}</select>
+            {form.dailySchedules.map((schedule, idx) => {
+              const conflict = dailyConflicts.find(c => c.date === schedule.date);
+              
+              return (
+                <div key={schedule.date} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-100 p-4 rounded-xl bg-slate-50">
+                  <span className="font-bold text-sm text-slate-700">{getEthDateString(schedule.date)}</span>
+                  
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-2">
+                      <select value={schedule.startTime.substring(0, 5)} onChange={e => updateSchedule(idx, 'startTime', e.target.value)} className="bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold">{generateHourOptions()}</select>
+                      <span>to</span>
+                      <select value={schedule.endTime.substring(0, 5)} onChange={e => updateSchedule(idx, 'endTime', e.target.value)} className="bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold">{generateHourOptions()}</select>
+                    </div>
+
+                    {/* NEW: Displays cleaning gap warnings directly under the time selectors */}
+                    {conflict && conflict.type === 'cleaning' && (
+                      <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest mt-1">
+                        <Info size={12}/> {conflict.msg}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div className="flex gap-4 mt-4">
               <Button variant="outline" onClick={prevStep} className="flex-1 font-bold h-12 rounded-xl">Back</Button>
