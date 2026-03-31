@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   ChevronDown, ChevronUp, Clock, XCircle, Users, MapPin, Calendar,
   FileText, Activity, Trash2, Star, CreditCard, User, Mail, Phone,
-  CheckCircle2, AlertTriangle, Building2, ChevronLeft, ChevronRight
+  CheckCircle2, AlertTriangle, Building2, ChevronLeft, ChevronRight, Filter, X
 } from 'lucide-react';
 import { ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
@@ -43,25 +43,55 @@ export default function ManageBookings() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
+  // NEW: Filtering State
+  const [filterVenue, setFilterVenue] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<string>('');
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab]);
+  }, [activeTab, filterVenue, filterDate]); // Reset to page 1 when any filter changes
 
   const [clashWarning, setClashWarning] = useState<{ isOpen: boolean, clashingBooking: Booking | null, attemptedAction?: { id: string, status: string } }>({ isOpen: false, clashingBooking: null });
 
+  // 1. First apply Venue and Date filters
+  const baseFilteredBookings = bookings.filter(b => {
+    // Venue Filter
+    let venueMatch = true;
+    if (filterVenue !== 'all') {
+      const bVenue = b.venue || b.venueId;
+      venueMatch = String(bVenue) === String(filterVenue);
+    }
+
+    // Date Filter (Checks if filterDate falls within start and end date)
+    let dateMatch = true;
+    if (filterDate) {
+      const start = b.start_date || b.startDate;
+      const end = b.end_date || b.endDate;
+      if (start && end) {
+        dateMatch = filterDate >= start && filterDate <= end;
+      } else {
+        dateMatch = false;
+      }
+    }
+
+    return venueMatch && dateMatch;
+  });
+
+  // 2. Calculate dynamic counts based on the filtered results
   const counts = {
-    pending: bookings.filter(b => b.status === 'reserved').length,
-    payment: bookings.filter(b => b.status === 'approved').length,
-    confirmed: bookings.filter(b => ['confirmed', 'override', 'completed'].includes(b.status)).length,
-    rejected: bookings.filter(b => ['rejected', 'cancelled'].includes(b.status)).length,
-    all: bookings.length,
+    pending: baseFilteredBookings.filter(b => b.status === 'reserved').length,
+    payment: baseFilteredBookings.filter(b => b.status === 'approved').length,
+    confirmed: baseFilteredBookings.filter(b => ['confirmed', 'override', 'completed'].includes(b.status)).length,
+    rejected: baseFilteredBookings.filter(b => ['rejected', 'cancelled'].includes(b.status)).length,
+    all: baseFilteredBookings.length,
   };
 
-  const filteredBookings = bookings.filter(b => {
+  // 3. Finally, apply the Tab (Status) filter for display
+  const finalFilteredBookings = baseFilteredBookings.filter(b => {
     if (activeTab === 'all') return true;
     if (activeTab === 'pending') return b.status === 'reserved';
     if (activeTab === 'payment') return b.status === 'approved';
@@ -70,12 +100,12 @@ export default function ManageBookings() {
     return true;
   });
 
-  const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
+  const totalPages = Math.ceil(finalFilteredBookings.length / itemsPerPage);
 
   const paginatedBookings = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return filteredBookings.slice(start, start + itemsPerPage);
-  }, [filteredBookings, currentPage]);
+    return finalFilteredBookings.slice(start, start + itemsPerPage);
+  }, [finalFilteredBookings, currentPage]);
 
   const handleStatusChange = async (id: string, status: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -215,14 +245,57 @@ export default function ManageBookings() {
       })()}
 
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
           <Activity className="w-8 h-8 text-[#268053]" /> Manage Bookings
         </h1>
         <p className="text-muted-foreground mt-2">Verify payments on pending requests, or apply VIP overrides.</p>
       </div>
 
-      {/* Tab Filters */}
+      {/* NEW: Filter Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-slate-500">
+          <Filter className="w-4 h-4" />
+          <span className="text-sm font-bold uppercase tracking-widest">Filters</span>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          
+          <div className="relative w-full sm:w-auto">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              value={filterVenue}
+              onChange={e => setFilterVenue(e.target.value)}
+              className="w-full sm:w-48 pl-9 pr-8 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] appearance-none cursor-pointer transition-all"
+            >
+              <option value="all">All Venues</option>
+              {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </div>
+
+          <div className="relative w-full sm:w-auto">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="date"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              className="w-full sm:w-48 pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] transition-all cursor-pointer"
+            />
+          </div>
+
+          {(filterVenue !== 'all' || filterDate !== '') && (
+            <Button 
+              variant="ghost" 
+              onClick={() => { setFilterVenue('all'); setFilterDate(''); }}
+              className="w-full sm:w-auto text-rose-500 hover:text-rose-700 hover:bg-rose-50 font-bold px-3 h-10"
+            >
+              <X className="w-4 h-4 mr-1.5" /> Clear
+            </Button>
+          )}
+
+        </div>
+      </div>
+
+      {/* Tab Filters (Status) */}
       <div className="flex overflow-x-auto pb-2 mb-6 border-b border-slate-200 hide-scrollbar">
         {(['payment', 'pending', 'confirmed', 'rejected', 'all'] as TabFilter[]).map((tab) => (
           <button
@@ -245,7 +318,13 @@ export default function ManageBookings() {
 
       {/* Admin Booking List */}
       <div className="space-y-4">
-        {paginatedBookings.map((b, i) => {
+        {paginatedBookings.length === 0 ? (
+           <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-16 text-center text-slate-500">
+              <Calendar className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+              <p className="font-bold">No bookings found for these filters.</p>
+              <p className="text-sm">Try clearing your filters or changing the status tab.</p>
+           </div>
+        ) : paginatedBookings.map((b, i) => {
 
           // Standardization
           const safeId = String(b.id);
@@ -392,7 +471,6 @@ export default function ManageBookings() {
                     </div>
                   )}
 
-                  {/* RESTORED FULL 3-COLUMN LAYOUT */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                     {/* COLUMN 1: Organizer Details */}
@@ -518,7 +596,7 @@ export default function ManageBookings() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between bg-white px-6 py-4 rounded-xl border border-slate-200 mt-6 shadow-sm">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-              Showing <span className="text-slate-900">{Math.min(filteredBookings.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(filteredBookings.length, currentPage * itemsPerPage)}</span> of {filteredBookings.length}
+              Showing <span className="text-slate-900">{Math.min(finalFilteredBookings.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(finalFilteredBookings.length, currentPage * itemsPerPage)}</span> of {finalFilteredBookings.length}
             </p>
             <div className="flex gap-2">
               <Button
