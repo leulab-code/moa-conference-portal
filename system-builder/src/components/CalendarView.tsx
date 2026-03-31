@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useApp } from '@/lib/app-context';
 import { format, parseISO } from 'date-fns';
-import { Booking, BookingStatus } from '@/lib/types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, MapPin, User, CheckCircle2, Clock, Star, Info, X as CloseIcon, Building, Mail, Phone, Clock3, AlertCircle, XCircle, FileText, MonitorSmartphone, AlignLeft, Users } from 'lucide-react';
+import { Booking } from '@/lib/types';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, MapPin, User, CheckCircle2, Clock, Star, X as CloseIcon, Building, Mail, Phone, Clock3, AlertCircle, XCircle, FileText, Users } from 'lucide-react';
 import { ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 
@@ -20,49 +20,44 @@ const getEthDateString = (gregStr: string) => {
   }
 };
 
-// --- NEW: Unified Status Logic ---
-const getSimplifiedStatus = (status: string) => {
-  const s = status?.toLowerCase() || '';
-  // VIPs and Paid are grouped as Confirmed
-  if (['confirmed', 'override', 'completed'].includes(s)) return 'confirmed';
-  // Pending and Wait Pay are grouped as Tentative
-  if (['reserved', 'approved'].includes(s)) return 'tentative';
-  return 'cancelled'; 
+// --- NEW: Dual Status Logic ---
+
+// 1. What Admins See (Detailed)
+const adminStatusConfig = {
+  reserved: { label: 'Pending Review', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', borderLeft: 'border-l-amber-500', icon: <Clock3 size={12} className="shrink-0 text-amber-600" /> },
+  approved: { label: 'Awaiting Payment', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', borderLeft: 'border-l-blue-500', icon: <Clock size={12} className="shrink-0 text-blue-600" /> },
+  confirmed: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', borderLeft: 'border-l-[#268053]', icon: <CheckCircle2 size={12} className="shrink-0 text-emerald-600" /> },
+  override: { label: 'VIP Override', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', borderLeft: 'border-l-purple-500', icon: <Star size={12} className="shrink-0 text-purple-600" /> },
+  completed: { label: 'Completed', color: 'text-slate-800', bg: 'bg-slate-200', border: 'border-slate-400', borderLeft: 'border-l-slate-600', icon: <CheckCircle2 size={12} className="shrink-0 text-slate-600" /> },
+  rejected: { label: 'Rejected', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', borderLeft: 'border-l-red-500', icon: <XCircle size={12} className="shrink-0 text-red-600" /> },
+  cancelled: { label: 'Cancelled', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', borderLeft: 'border-l-slate-400', icon: <AlertCircle size={12} className="shrink-0 text-slate-500" /> }
 };
 
-const statusConfig = {
-  tentative: {
-    label: 'Tentative',
-    color: 'text-amber-700',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    borderLeft: 'border-l-amber-500',
-    icon: <Clock size={12} className="shrink-0 text-amber-600" />
-  },
-  confirmed: {
-    label: 'Confirmed',
-    color: 'text-emerald-700',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    borderLeft: 'border-l-[#268053]',
-    icon: <CheckCircle2 size={12} className="shrink-0 text-emerald-600" />
-  },
-  cancelled: {
-    label: 'Cancelled',
-    color: 'text-slate-500',
-    bg: 'bg-slate-50',
-    border: 'border-slate-200',
-    borderLeft: 'border-l-slate-400',
-    icon: <AlertCircle size={12} className="shrink-0 text-slate-500" />
+// 2. What Public Users See (Simplified)
+const userStatusConfig = {
+  tentative: { label: 'Tentative', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', borderLeft: 'border-l-amber-500', icon: <Clock size={12} className="shrink-0 text-amber-600" /> },
+  confirmed: { label: 'Confirmed', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', borderLeft: 'border-l-[#268053]', icon: <CheckCircle2 size={12} className="shrink-0 text-emerald-600" /> },
+  cancelled: { label: 'Cancelled', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', borderLeft: 'border-l-slate-400', icon: <AlertCircle size={12} className="shrink-0 text-slate-500" /> }
+};
+
+const getStatusProps = (status: string, isAdmin: boolean) => {
+  const s = status?.toLowerCase() || '';
+  if (isAdmin) {
+    return adminStatusConfig[s as keyof typeof adminStatusConfig] || adminStatusConfig.reserved;
+  } else {
+    // Compress logic for public users
+    if (['confirmed', 'override', 'completed'].includes(s)) return userStatusConfig.confirmed;
+    if (['reserved', 'approved'].includes(s)) return userStatusConfig.tentative;
+    return userStatusConfig.cancelled;
   }
 };
 
 
 // --- Modal Components ---
 
+// Because only admins can open this modal, we automatically pass isAdmin=true
 function StatusBadge({ status }: { status: string }) {
-  const simpleStatus = getSimplifiedStatus(status);
-  const cfg = statusConfig[simpleStatus as keyof typeof statusConfig] || statusConfig.tentative;
+  const cfg = getStatusProps(status, true);
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${cfg.bg} ${cfg.color} ${cfg.border} shadow-sm`}>
@@ -270,13 +265,22 @@ export default function CalendarView() {
         
         <div className="flex flex-col sm:flex-row items-center gap-4">
           
-          {/* UPDATED: Simplified Legend for everyone */}
-          <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-wider bg-white px-5 py-2.5 rounded-xl border border-slate-200 shadow-sm">
-            <span className="flex items-center gap-2 text-amber-700"><span className="w-2.5 h-2.5 rounded bg-amber-500" /> Tentative</span>
-            <span className="flex items-center gap-2 text-emerald-700"><span className="w-2.5 h-2.5 rounded bg-[#268053]" /> Confirmed</span>
-          </div>
+          {/* UPDATED: Dynamic Legend based on Role */}
+          {isAdmin ? (
+            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-wider bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+              <span className="flex items-center gap-1.5 text-amber-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-amber-500" /> Pending</span>
+              <span className="flex items-center gap-1.5 text-blue-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-blue-500" /> Wait Pay</span>
+              <span className="flex items-center gap-1.5 text-emerald-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-[#268053]" /> Paid</span>
+              <span className="flex items-center gap-1.5 text-purple-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-purple-500" /> VIP</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-wider bg-white px-5 py-2.5 rounded-xl border border-slate-200 shadow-sm">
+              <span className="flex items-center gap-2 text-amber-700"><span className="w-2.5 h-2.5 rounded bg-amber-500" /> Tentative</span>
+              <span className="flex items-center gap-2 text-emerald-700"><span className="w-2.5 h-2.5 rounded bg-[#268053]" /> Confirmed</span>
+            </div>
+          )}
 
-          <div className="relative group w-full sm:w-auto">
+          <div className="relative group w-full sm:w-auto shrink-0">
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#268053]" />
             <select
               value={selectedVenue}
@@ -345,8 +349,8 @@ export default function CalendarView() {
                  
                  <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
                    {dayBookings.map(b => {
-                      const simpleStatus = getSimplifiedStatus(b.status);
-                      const cfg = statusConfig[simpleStatus as keyof typeof statusConfig] || statusConfig.tentative;
+                      // Fetch the correct styles dynamically based on Role
+                      const cfg = getStatusProps(b.status, isAdmin);
 
                       return (
                         <div 

@@ -2,12 +2,13 @@ import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/lib/app-context';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { format, parseISO } from 'date-fns';
 import {
   ChevronDown, ChevronUp, Clock, XCircle, Users, MapPin, Calendar,
   FileText, Activity, Trash2, Star, CreditCard, User, Mail, Phone,
   CheckCircle2, AlertTriangle, Building2, ChevronLeft, ChevronRight, Filter, X
 } from 'lucide-react';
-import { ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
+import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 import { Booking } from '@/lib/types';
 
@@ -43,9 +44,11 @@ export default function ManageBookings() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  // NEW: Filtering State
+  // NEW: Advanced Filtering State
   const [filterVenue, setFilterVenue] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -53,11 +56,11 @@ export default function ManageBookings() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, filterVenue, filterDate]); // Reset to page 1 when any filter changes
+  }, [activeTab, filterVenue, filterDate, filterStatus]); // Reset to page 1 when any filter changes
 
   const [clashWarning, setClashWarning] = useState<{ isOpen: boolean, clashingBooking: Booking | null, attemptedAction?: { id: string, status: string } }>({ isOpen: false, clashingBooking: null });
 
-  // 1. First apply Venue and Date filters
+  // 1. First apply Venue, Date, and Specific Status filters
   const baseFilteredBookings = bookings.filter(b => {
     // Venue Filter
     let venueMatch = true;
@@ -78,7 +81,13 @@ export default function ManageBookings() {
       }
     }
 
-    return venueMatch && dateMatch;
+    // Status Filter (Dropdown)
+    let statusMatch = true;
+    if (filterStatus !== 'all') {
+      statusMatch = b.status === filterStatus;
+    }
+
+    return venueMatch && dateMatch && statusMatch;
   });
 
   // 2. Calculate dynamic counts based on the filtered results
@@ -90,7 +99,7 @@ export default function ManageBookings() {
     all: baseFilteredBookings.length,
   };
 
-  // 3. Finally, apply the Tab (Status) filter for display
+  // 3. Finally, apply the Tab (Category) filter for display
   const finalFilteredBookings = baseFilteredBookings.filter(b => {
     if (activeTab === 'all') return true;
     if (activeTab === 'pending') return b.status === 'reserved';
@@ -253,39 +262,77 @@ export default function ManageBookings() {
       </div>
 
       {/* NEW: Filter Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-slate-500">
           <Filter className="w-4 h-4" />
           <span className="text-sm font-bold uppercase tracking-widest">Filters</span>
         </div>
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+        
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full md:w-auto">
           
+          {/* Venue Dropdown */}
           <div className="relative w-full sm:w-auto">
             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <select
               value={filterVenue}
               onChange={e => setFilterVenue(e.target.value)}
-              className="w-full sm:w-48 pl-9 pr-8 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] appearance-none cursor-pointer transition-all"
+              className="w-full sm:w-44 pl-9 pr-8 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] appearance-none cursor-pointer transition-all"
             >
               <option value="all">All Venues</option>
               {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
           </div>
 
+          {/* Specific Status Dropdown */}
           <div className="relative w-full sm:w-auto">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="date"
-              value={filterDate}
-              onChange={e => setFilterDate(e.target.value)}
-              className="w-full sm:w-48 pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] transition-all cursor-pointer"
-            />
+            <Activity className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="w-full sm:w-44 pl-9 pr-8 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] appearance-none cursor-pointer transition-all"
+            >
+              <option value="all">All Statuses</option>
+              <option value="reserved">Pending Review</option>
+              <option value="approved">Awaiting Payment</option>
+              <option value="confirmed">Confirmed (Paid)</option>
+              <option value="override">VIP Override</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
 
-          {(filterVenue !== 'all' || filterDate !== '') && (
+          {/* Ethiopian Calendar Popover */}
+          <div className="relative w-full sm:w-auto">
+            <div 
+              onClick={() => setShowCalendar(!showCalendar)}
+              className="flex items-center gap-2 w-full sm:w-48 pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none hover:bg-slate-100 hover:border-emerald-200 transition-all cursor-pointer"
+            >
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <span className="truncate">{filterDate ? toEthDateString(filterDate) : 'Any Date'}</span>
+            </div>
+
+            {showCalendar && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowCalendar(false)} />
+                <div className="absolute top-full left-0 sm:right-0 sm:left-auto mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 animate-in fade-in slide-in-from-top-2">
+                  <EthiopianCalendar 
+                    selected={{ from: filterDate ? parseISO(filterDate) : undefined, to: filterDate ? parseISO(filterDate) : undefined }} 
+                    onSelect={(r) => { 
+                      setFilterDate(r?.from ? format(r.from, 'yyyy-MM-dd') : ''); 
+                      if(r?.from) setShowCalendar(false);
+                    }} 
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Clear Filters Button */}
+          {(filterVenue !== 'all' || filterDate !== '' || filterStatus !== 'all') && (
             <Button 
               variant="ghost" 
-              onClick={() => { setFilterVenue('all'); setFilterDate(''); }}
+              onClick={() => { setFilterVenue('all'); setFilterDate(''); setFilterStatus('all'); }}
               className="w-full sm:w-auto text-rose-500 hover:text-rose-700 hover:bg-rose-50 font-bold px-3 h-10"
             >
               <X className="w-4 h-4 mr-1.5" /> Clear
@@ -295,7 +342,7 @@ export default function ManageBookings() {
         </div>
       </div>
 
-      {/* Tab Filters (Status) */}
+      {/* Tab Filters (Categories) */}
       <div className="flex overflow-x-auto pb-2 mb-6 border-b border-slate-200 hide-scrollbar">
         {(['payment', 'pending', 'confirmed', 'rejected', 'all'] as TabFilter[]).map((tab) => (
           <button
