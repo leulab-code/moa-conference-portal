@@ -127,8 +127,8 @@ export default function VenueOperations() {
             <div>
                <h2 className="text-2xl font-black mb-2 tracking-tight">Cleaning Schedule Protocol</h2>
                <p className="text-slate-400 max-w-2xl leading-relaxed">
-                 All conference rooms are automatically flagged as <strong className="text-white">"Under Cleaning"</strong> every morning from 06:00 to 08:00. During this window, the booking system will display a priority maintenance warning to any user attempting to schedule events.
-               </p>
+  To maintain facility standards, a mandatory <strong className="text-white">1-hour cleaning window</strong> is automatically required between consecutive meetings. During this turnaround time, the booking system will block overlapping schedules to ensure our staff can fully prepare the room for the next event.
+</p>
             </div>
          </div>
       </div>
