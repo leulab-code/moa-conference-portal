@@ -153,8 +153,8 @@ export default function VenuesPage() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image is too large. Max size is 5MB.');
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error('Image is too large. Max size is 15MB.');
         return;
       }
       setImageFile(file);
