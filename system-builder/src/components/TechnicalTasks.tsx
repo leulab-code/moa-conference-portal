@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useApp } from '@/lib/app-context';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 import { 
   Monitor, 
   MapPin, 
@@ -20,6 +19,8 @@ import {
   Video,
   Tv
 } from 'lucide-react';
+import { ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
+import { EthDateTime } from 'ethiopian-calendar-date-converter';
 
 const serviceIcons: Record<string, React.ReactNode> = {
   'Internet Access': <Wifi className="w-4 h-4" />,
@@ -27,6 +28,18 @@ const serviceIcons: Record<string, React.ReactNode> = {
   'Video Conferencing': <Video className="w-4 h-4" />,
   'Livestreaming': <Monitor className="w-4 h-4" />,
   'default': <Cpu className="w-4 h-4" />
+};
+
+const getEthDateString = (gregStr: string) => {
+  if (!gregStr) return '';
+  try {
+    const [y, m, d] = gregStr.split('-').map(Number);
+    const gDate = new Date(y, m - 1, d, 12, 0, 0); 
+    const ethDate = EthDateTime.fromEuropeanDate(gDate);
+    return `${ETH_MONTHS[ethDate.month - 1]} ${ethDate.date}, ${ethDate.year}`;
+  } catch {
+    return gregStr;
+  }
 };
 
 export default function TechnicalTasks() {
@@ -75,13 +88,17 @@ export default function TechnicalTasks() {
             const venue = venues.find(v => v.id === b.venueId);
             const isExpanded = expandedId === b.id;
             const isAck = b.ictAcknowledged;
+            
+            // NEW: Check if any services are marked as unavailable
+            const unavailableCount = b.unavailableTechnicalServices?.length || 0;
+            const hasUnavailable = unavailableCount > 0;
 
             return (
               <div 
                 key={b.id}
                 className={`bg-white border rounded-2xl overflow-hidden transition-all duration-300 ${
                   isExpanded ? 'shadow-xl ring-1 ring-slate-100' : 'shadow-soft hover:shadow-md hover:border-slate-300'
-                }`}
+                } ${hasUnavailable ? 'border-rose-200' : ''}`}
                 style={{ animation: `fade-in-up 0.5s cubic-bezier(0.16,1,0.3,1) ${50 * i}ms both` }}
               >
                 {/* Task Card Header */}
@@ -115,13 +132,22 @@ export default function TechnicalTasks() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-slate-400" />
-                          <span>{format(new Date(b.startDate), 'MMM d, yyyy')}</span>
+                          {/* NEW: Ethiopian Date applied here */}
+                          <span>{getEthDateString(b.startDate)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-slate-400" />
                           <span>{b.startTime} - {b.endTime}</span>
                         </div>
                       </div>
+
+                      {/* NEW: Prominent warning badge if services are unavailable */}
+                      {hasUnavailable && (
+                        <div className="flex items-center gap-1.5 mt-3 bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg w-fit border border-rose-200 shadow-sm animate-pulse">
+                          <AlertCircle size={14} />
+                          {unavailableCount} Requested Service{unavailableCount > 1 ? 's' : ''} Unavailable
+                        </div>
+                      )}
                     </div>
 
                     {/* Action Toggle */}
