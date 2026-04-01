@@ -94,9 +94,9 @@ class LoginView(APIView):
             sp = user.system_profile
             user_data = {
                 'id':         sp.id,
-                'name':        sp.name,
-                'email':       sp.email,
-                'role':        sp.role,
+                'name':       sp.name,
+                'email':      sp.email,
+                'role':       sp.role,
                 'created_at': sp.created_at.isoformat() if sp.created_at else None,
             }
         except SystemUser.DoesNotExist:
@@ -118,9 +118,9 @@ class MeView(APIView):
             sp = request.user.system_profile
             return Response({
                 'id':         sp.id,
-                'name':        sp.name,
-                'email':       sp.email,
-                'role':        sp.role,
+                'name':       sp.name,
+                'email':      sp.email,
+                'role':       sp.role,
                 'created_at': sp.created_at.isoformat() if sp.created_at else None,
             })
         except SystemUser.DoesNotExist:
@@ -221,7 +221,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         if old_status != new_status:
             self._trigger_email(booking, new_status)
 
-   def _trigger_email(self, booking, status):
+    def _trigger_email(self, booking, status):
+        """Internal helper to send emails based on status"""
         if status == 'received':
             send_automated_email(booking, 'received')
         elif status == 'approved':
@@ -230,6 +231,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             send_automated_email(booking, 'confirmed')
         elif status == 'rejected':
             send_automated_email(booking, 'rejected')
+        # --- NEW: Added trigger for completed ---
         elif status == 'completed':
             send_automated_email(booking, 'completed')
 
