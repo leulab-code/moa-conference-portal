@@ -133,18 +133,21 @@ export default function AppShell({ currentPage, onNavigate, children }: AppShell
           collapsed ? 'w-20' : 'w-72'
         }`}
       >
-        {/* Logo area */}
-        <div className="flex items-center gap-4 px-6 py-8 border-b border-white/10">
-          <div className="flex items-center justify-center w-12 h-12 shrink-0">
+        {/* Logo area - Now a clickable link to Home with classic styling */}
+        <Link 
+          to="/" 
+          className="flex items-center gap-4 px-6 py-8 border-b border-white/10 hover:bg-white/5 transition-colors group cursor-pointer"
+        >
+          <div className="flex items-center justify-center w-12 h-12 shrink-0 transition-transform group-hover:scale-105">
             <img src={moaLogo} alt="MoA Logo" className="w-full h-full object-contain" />
           </div>
           {!collapsed && (
             <div className="min-w-0 animate-in fade-in slide-in-from-left-2 duration-300">
-              <p className="text-base font-serif font-bold tracking-wide text-white">MoA Portal</p>
-              <p className="text-[10px] font-bold tracking-[0.2em] text-[#8cbaa2] uppercase">Conference System</p>
+              <p className="text-[17px] font-serif font-medium tracking-wide text-white/95">MoA Portal</p>
+              <p className="text-[10px] font-medium tracking-[0.2em] text-[#8cbaa2] uppercase mt-0.5">Conference System</p>
             </div>
           )}
-        </div>
+        </Link>
 
         {/* Navigation */}
         <nav className="flex-1 py-6 space-y-2 px-4 overflow-y-auto custom-scrollbar">
@@ -214,7 +217,8 @@ export default function AppShell({ currentPage, onNavigate, children }: AppShell
         {/* Top Header Bar */}
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-40 sticky top-0">
           <div className="flex items-center gap-4">
-             <h2 className="text-lg font-bold text-slate-800 tracking-tight font-serif hidden sm:block">
+             {/* UPDATED HEADER: Classic, Professional, Serif, Not heavy */}
+             <h2 className="text-xl font-medium text-slate-700 tracking-wide font-serif hidden sm:block">
                {navItems.find(n => n.id === currentPage)?.label || 'Conference Center'}
              </h2>
           </div>

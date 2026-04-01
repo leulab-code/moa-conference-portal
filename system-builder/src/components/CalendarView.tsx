@@ -380,6 +380,12 @@ export default function CalendarView() {
                            <div className={`text-[10px] font-medium truncate opacity-90 ${isAdmin ? 'pl-3.5 text-slate-600' : 'text-slate-800 font-bold'}`}>
                               {b.eventTitle}
                            </div>
+
+                           {/* NEW: Added Time Display for everyone to see availability */}
+                           <div className={`flex items-center gap-1 mt-0.5 text-[9px] font-bold opacity-80 ${isAdmin ? 'pl-3.5 text-slate-500' : 'text-slate-600'}`}>
+                              <Clock size={10} className="shrink-0" />
+                              <span className="truncate">{b.startTime} - {b.endTime}</span>
+                           </div>
                         </div>
                       )
                    })}
