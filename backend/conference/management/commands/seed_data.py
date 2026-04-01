@@ -71,13 +71,16 @@ class Command(BaseCommand):
                 }
             )
 
-        # 5. SEED EMAIL TEMPLATES
+# 5. SEED EMAIL TEMPLATES
         self.stdout.write('Seeding professional email templates...')
         templates = [
             {'trigger': 'received', 'subject': 'Acknowledge: {event} Request Received', 'body': 'Dear {name},\n\nWe have received your booking request for {event} at {venue} on {date}. Your reference ID is {ref}.\n\nOur team is currently reviewing your request. You will be notified via email of any status updates.'},
             {'trigger': 'approved', 'subject': 'Reservation Approved: {event}', 'body': 'Dear {name},\n\nYour booking request for {event} at {venue} on {date} has been approved. Please proceed with the necessary arrangements.\n\nThank you.'},
             {'trigger': 'confirmed', 'subject': 'Reservation Confirmed: {event}', 'body': 'Dear {name},\n\nYour booking for {event} is now officially confirmed. We look forward to hosting you.'},
             {'trigger': 'rejected', 'subject': 'Update: Booking Request Rejected', 'body': 'Dear {name},\n\nWe regret to inform you that your booking for {event} has been rejected. Please contact the administrator for further details.'},
+            
+            # --- NEW: THANK YOU TEMPLATE ---
+            {'trigger': 'completed', 'subject': 'Thank You: {event} Concluded', 'body': 'Dear {name},\n\nYour event "{event}" at {venue} has successfully concluded. Thank you for choosing the Ministry of Agriculture Conference Center.\n\nWe hope the facility and services met your highest expectations. We look forward to hosting you again.'},
         ]
 
 
