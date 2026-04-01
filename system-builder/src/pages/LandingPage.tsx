@@ -409,7 +409,8 @@ export default function LandingPage() {
         />
       )}
 
-     <nav 
+      {/* Top Navigation Bar */}
+      <nav 
         className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 animate-[slide-down_0.8s_cubic-bezier(0.16,1,0.3,1)] ${
           isScrolled 
             ? 'bg-white/95 backdrop-blur-md py-3 shadow-lg border-b border-slate-200 px-6 lg:px-12 xl:px-20' 
@@ -430,7 +431,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* PROFESSIONAL, VISIBLE, CLASSIC NAVIGATION LINKS */}
           <div className="hidden lg:flex items-center gap-10">
             <a href="#/venues" onClick={(e) => { e.preventDefault(); navigate('/app#/venues'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Venues</a>
             <a href="/book" onClick={(e) => { e.preventDefault(); navigate('/book'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Book a Venue</a>
@@ -458,6 +458,7 @@ export default function LandingPage() {
           </div>
         </div>
       </nav>
+
       <main>
         <section className="relative w-full overflow-visible min-h-[550px] pt-24 pb-24 flex flex-col items-center justify-center text-center">
           <div className="absolute inset-0 z-0 overflow-hidden">
@@ -548,6 +549,9 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
               {venues.map((venue, i) => {
                 const isOutOfOrder = venue.status === 'out_of_order';
+                
+                // NEW: Split the purpose string into an array
+                const purposes = (venue.bestFor || venue.best_for || 'General Facility').split(',').map((p: string) => p.trim()).filter(Boolean);
 
                 return (
                   <div key={venue.id} className={`group bg-white rounded-[2rem] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col transition-all duration-500 ease-out relative ${isOutOfOrder ? 'opacity-80 grayscale-[0.5]' : 'hover:shadow-[0_40px_80px_rgba(0,0,0,0.08)] hover:-translate-y-2'}`} style={{ animation: `fade-in-up 0.5s cubic-bezier(0.16,1,0.3,1) ${100 * i}ms both` }}>
@@ -624,11 +628,23 @@ export default function LandingPage() {
                           })()}
 
                         </div>
+                        
+                        {/* NEW: Bulleted List for Capabilities/Purpose */}
                         <div className="flex flex-col mb-8">
-                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-2">Ideal Setting For</span>
-                          <p className="text-sm font-semibold text-slate-600 flex items-center gap-2">
-                            {venue.bestFor}
-                          </p>
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Ideal Setting For</span>
+                          <div className="flex flex-col gap-2">
+                            {purposes.slice(0, 2).map((purpose: string, idx: number) => (
+                              <p key={idx} className="text-xs text-slate-500 font-bold flex items-center gap-2 truncate">
+                                <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                                <span className="truncate">{purpose}</span>
+                              </p>
+                            ))}
+                            {purposes.length > 2 && (
+                              <p className="text-[10px] font-black text-slate-400 ml-6 mt-1 uppercase tracking-widest">
+                                + {purposes.length - 2} more capabilities
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         {/* Disable the booking button if out of order */}
@@ -702,7 +718,6 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
-
 
       <footer className="bg-[#0f172a] text-white pt-20 pb-12 px-6 lg:px-12 xl:px-20 mt-0">
         <div className="max-w-7xl mx-auto">
