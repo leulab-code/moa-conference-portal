@@ -222,7 +222,6 @@ class BookingViewSet(viewsets.ModelViewSet):
             self._trigger_email(booking, new_status)
 
    def _trigger_email(self, booking, status):
-        """Internal helper to send emails based on status"""
         if status == 'received':
             send_automated_email(booking, 'received')
         elif status == 'approved':
@@ -231,7 +230,6 @@ class BookingViewSet(viewsets.ModelViewSet):
             send_automated_email(booking, 'confirmed')
         elif status == 'rejected':
             send_automated_email(booking, 'rejected')
-        # --- NEW: Trigger Thank You email when marked completed ---
         elif status == 'completed':
             send_automated_email(booking, 'completed')
 
