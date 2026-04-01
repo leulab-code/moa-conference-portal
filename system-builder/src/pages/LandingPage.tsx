@@ -409,8 +409,7 @@ export default function LandingPage() {
         />
       )}
 
-      {/* Top Navigation Bar */}
-      <nav 
+     <nav 
         className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 animate-[slide-down_0.8s_cubic-bezier(0.16,1,0.3,1)] ${
           isScrolled 
             ? 'bg-white/95 backdrop-blur-md py-3 shadow-lg border-b border-slate-200 px-6 lg:px-12 xl:px-20' 
@@ -419,38 +418,39 @@ export default function LandingPage() {
       >
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-10">
+            {/* LOGO REDIRECTS TO HOME */}
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
               <div className="w-12 h-12 flex items-center justify-center shrink-0">
                 <img src={moaLogo} alt="MoA Logo" className="w-full h-full object-contain" />
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-lg font-extrabold text-[#111827] leading-none mb-1 tracking-tight">MoA Conference Center</h1>
-                <p className="text-[10px] font-bold text-slate-400 leading-none uppercase tracking-tight">Booking Management System</p>
+                <h1 className="text-xl font-serif font-bold text-[#111827] leading-none mb-1.5 tracking-tight">MoA Conference Center</h1>
+                <p className="text-[11px] font-medium text-slate-500 leading-none uppercase tracking-wide">Booking Management System</p>
               </div>
             </div>
           </div>
 
+          {/* PROFESSIONAL, VISIBLE, CLASSIC NAVIGATION LINKS */}
           <div className="hidden lg:flex items-center gap-10">
-            <a href="#/venues" onClick={(e) => { e.preventDefault(); navigate('/app#/venues'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Venues</a>
-            <a href="/book" onClick={(e) => { e.preventDefault(); navigate('/book'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Book a Venue</a>
-            <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Track Status</a>
-            <a href="#/my-bookings" onClick={(e) => { e.preventDefault(); if (token) navigate('/app#/my-bookings'); else navigate('/login'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">My Bookings</a>
-            <a href="#/calendar" onClick={(e) => { e.preventDefault(); navigate('/app#/calendar'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Calendar</a>
-            <a href="#/manage-bookings" onClick={(e) => { e.preventDefault(); if (token) navigate('/app#/manage-bookings'); else navigate('/login'); }} className="text-[11px] font-black text-[#475569] hover:text-[#268053] transition-colors uppercase tracking-tight whitespace-nowrap">Admin Panel</a>
-
+            <a href="#/venues" onClick={(e) => { e.preventDefault(); navigate('/app#/venues'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Venues</a>
+            <a href="/book" onClick={(e) => { e.preventDefault(); navigate('/book'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Book a Venue</a>
+            <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Track Status</a>
+            <a href="#/my-bookings" onClick={(e) => { e.preventDefault(); if (token) navigate('/app#/my-bookings'); else navigate('/login'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">My Bookings</a>
+            <a href="#/calendar" onClick={(e) => { e.preventDefault(); navigate('/app#/calendar'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Calendar</a>
+            <a href="#/manage-bookings" onClick={(e) => { e.preventDefault(); if (token) navigate('/app#/manage-bookings'); else navigate('/login'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Admin Panel</a>
           </div>
 
           <div className="flex items-center gap-4 h-full">
             {token ? (
-              <button onClick={() => navigate('/app')} className="px-6 py-2.5 text-xs font-black border border-[#268053] text-[#268053] rounded-full hover:bg-emerald-50 transition-all leading-none h-fit">
+              <button onClick={() => navigate('/app')} className="px-6 py-2.5 text-sm font-semibold border border-[#268053] text-[#268053] rounded-full hover:bg-emerald-50 transition-all leading-none h-fit">
                 Dashboard
               </button>
             ) : (
               <>
-                <button onClick={() => navigate('/login')} className="px-6 py-2.5 text-xs font-black border border-[#268053] text-[#268053] rounded-full hover:bg-emerald-50 transition-all leading-none h-fit">
+                <button onClick={() => navigate('/login')} className="px-6 py-2.5 text-sm font-semibold border border-[#268053] text-[#268053] rounded-full hover:bg-emerald-50 transition-all leading-none h-fit">
                   Log In
                 </button>
-                <button onClick={() => navigate('/register')} className="px-6 py-2.5 text-xs font-black bg-[#268053] text-white rounded-full hover:bg-[#1b4332] transition-all shadow-md leading-none h-fit">
+                <button onClick={() => navigate('/register')} className="px-6 py-2.5 text-sm font-semibold bg-[#268053] text-white rounded-full hover:bg-[#1b4332] transition-all shadow-md leading-none h-fit">
                   Sign Up
                 </button>
               </>
@@ -458,7 +458,6 @@ export default function LandingPage() {
           </div>
         </div>
       </nav>
-
       <main>
         <section className="relative w-full overflow-visible min-h-[550px] pt-24 pb-24 flex flex-col items-center justify-center text-center">
           <div className="absolute inset-0 z-0 overflow-hidden">
