@@ -350,13 +350,13 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 </div>
                 <div>
                   <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Organization *</label>
-                  <input value={form.organizerOrganization} onChange={e => setForm(p => ({ ...p, organizerOrganization: e.target.value }))} className={inputClass('organizerOrganization')} placeholder="Ministry / Department" />
+                  <input value={form.organizerOrganization} onChange={e => setForm(p => ({ ...p, organizerOrganization: e.target.value }))} className={inputClass('organizerOrganization')} placeholder="Organization Name" />
                 </div>
               </div>
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Official Email *</label>
-                  <input type="email" value={form.organizerEmail} onChange={e => setForm(p => ({ ...p, organizerEmail: e.target.value }))} className={inputClass('organizerEmail')} placeholder="name@domain.gov.et" />
+                  <input type="email" value={form.organizerEmail} onChange={e => setForm(p => ({ ...p, organizerEmail: e.target.value }))} className={inputClass('organizerEmail')} placeholder="name@domain.com" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Phone Number *</label>
