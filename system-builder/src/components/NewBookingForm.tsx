@@ -27,12 +27,24 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   const [currentStep, setCurrentStep] = useState(1);
   const [submittedBookingId, setSubmittedBookingId] = useState<string | null>(null);
   
+  // --- NEW: Read venueId from the URL on initial load ---
+  const initialVenueId = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      return params.get('venueId') || hashParams.get('venueId') || '';
+    } catch {
+      return '';
+    }
+  }, []);
+
   const [form, setForm] = useState({
-    venueId: '', eventTitle: '', eventDescription: '', 
+    venueId: initialVenueId,
+    eventTitle: '', eventDescription: '', 
     organizerName: user?.name || '', 
     organizerOrganization: '', 
     organizerEmail: user?.email || '', 
-    organizerPhone: '',
+    organizerPhone: user?.phone || '',
     startDate: '', endDate: '', participantCount: '', 
     technicalServices: [] as string[], supportServices: [] as string[],
     dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
@@ -43,7 +55,8 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
       setForm(prev => ({
         ...prev,
         organizerName: user.name,
-        organizerEmail: user.email || ''
+        organizerEmail: user.email || '',
+        organizerPhone: user.phone || ''
       }));
     }
   }, [user]);
@@ -63,13 +76,9 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
   const selectedVenue = venues?.find(v => v.id?.toString() === form.venueId?.toString());
 
-  // --- NEW: Smart logic to check if a service is ALREADY included in the venue ---
   const isServiceIncluded = (type: 'technicalServices' | 'supportServices', serviceId: string) => {
     if (!selectedVenue || type === 'supportServices') return false;
-    
-    // Check both camelCase and snake_case just in case your backend uses either
     const includedIds = (selectedVenue.technicalServices || selectedVenue.technical_services || selectedVenue.includedServices || selectedVenue.included_services || []);
-      
     return includedIds.map(String).includes(String(serviceId));
   };
 
@@ -184,6 +193,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     if (step === 1) {
       if (!form.organizerName?.trim()) errs.organizerName = 'Required';
       if (!form.eventTitle?.trim()) errs.eventTitle = 'Required';
+      if (!form.organizerPhone?.trim() || form.organizerPhone.trim() === '+251') errs.organizerPhone = 'Required';
     } else if (step === 2) {
       if (!form.venueId) errs.venueId = 'Select a venue';
       if (!form.startDate) errs.startDate = 'Required';
@@ -273,9 +283,20 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
            <CheckCircle2 className="w-24 h-24 text-emerald-500 mx-auto mb-6 animate-in zoom-in duration-500 drop-shadow-sm" />
            <h2 className="text-4xl font-black text-slate-800 mb-2 uppercase tracking-tight">Request Submitted!</h2>
            
-           <p className="text-slate-500 font-bold text-sm mb-8 leading-relaxed px-4">
+           <p className="text-slate-500 font-bold text-sm mb-6 leading-relaxed px-4">
              Your slot is reserved under <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Awaiting Payment</span>.<br/> First to pay secures the venue!
            </p>
+
+           {/* --- NEW: VIP OVERRIDE NOTICE --- */}
+           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8 text-left flex gap-3 shadow-inner">
+             <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+             <div>
+               <p className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-1">Important Policy Notice</p>
+               <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
+                 As a state facility, high-level Ministerial and VIP events hold supreme priority. Your booking may be subject to overriding or cancellation (with full refund) even after payment is confirmed.
+               </p>
+             </div>
+           </div>
 
            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-5 mb-10 shadow-inner">
              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Your Tracking Reference</p>
@@ -322,16 +343,47 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
           {currentStep === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="grid gap-6 sm:grid-cols-2">
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Full Name *</label><input value={form.organizerName} onChange={e => setForm(p => ({ ...p, organizerName: e.target.value }))} className={inputClass('organizerName')} placeholder="e.g. Abebe Kebede" /></div>
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Organization *</label><input value={form.organizerOrganization} onChange={e => setForm(p => ({ ...p, organizerOrganization: e.target.value }))} className={inputClass('organizerOrganization')} placeholder="Ministry / Department" /></div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Full Name *</label>
+                  <input value={form.organizerName} onChange={e => setForm(p => ({ ...p, organizerName: e.target.value }))} className={inputClass('organizerName')} placeholder="e.g. Abebe Kebede" />
+                  {errors.organizerName && <p className="text-xs text-red-500 mt-1 font-bold">{errors.organizerName}</p>}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Organization *</label>
+                  <input value={form.organizerOrganization} onChange={e => setForm(p => ({ ...p, organizerOrganization: e.target.value }))} className={inputClass('organizerOrganization')} placeholder="Ministry / Department" />
+                </div>
               </div>
               <div className="grid gap-6 sm:grid-cols-2">
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Official Email *</label><input type="email" value={form.organizerEmail} onChange={e => setForm(p => ({ ...p, organizerEmail: e.target.value }))} className={inputClass('organizerEmail')} placeholder="name@domain.gov.et" /></div>
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Phone Number *</label><input value={form.organizerPhone} onChange={e => setForm(p => ({ ...p, organizerPhone: e.target.value }))} className={inputClass('organizerPhone')} placeholder="+251 911..." /></div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Official Email *</label>
+                  <input type="email" value={form.organizerEmail} onChange={e => setForm(p => ({ ...p, organizerEmail: e.target.value }))} className={inputClass('organizerEmail')} placeholder="name@domain.gov.et" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Phone Number *</label>
+                  <div className="flex">
+                    <div className="flex items-center justify-center px-4 bg-slate-100 border-2 border-r-0 border-slate-100 rounded-l-xl text-slate-700 font-bold text-sm">
+                      🇪🇹 +251
+                    </div>
+                    <input 
+                      value={form.organizerPhone.startsWith('+251') ? form.organizerPhone.substring(4).trim() : form.organizerPhone} 
+                      onChange={e => setForm(p => ({ ...p, organizerPhone: '+251 ' + e.target.value.replace(/^\+251\s*/, '') }))} 
+                      className={inputClass('organizerPhone').replace('rounded-xl', 'rounded-r-xl rounded-l-none')} 
+                      placeholder="911 23 45 67" 
+                    />
+                  </div>
+                  {errors.organizerPhone && <p className="text-xs text-red-500 mt-1 font-bold">{errors.organizerPhone}</p>}
+                </div>
               </div>
               <hr className="border-slate-100" />
-              <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Event Title *</label><input value={form.eventTitle} onChange={e => setForm(p => ({ ...p, eventTitle: e.target.value }))} className={inputClass('eventTitle')} placeholder="Annual Review Meeting 2026" /></div>
-              <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Description</label><textarea rows={3} value={form.eventDescription} onChange={e => setForm(p => ({ ...p, eventDescription: e.target.value }))} className={inputClass('eventDescription')} placeholder="Briefly describe the purpose of this booking..." /></div>
+              <div>
+                <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Event Title *</label>
+                <input value={form.eventTitle} onChange={e => setForm(p => ({ ...p, eventTitle: e.target.value }))} className={inputClass('eventTitle')} placeholder="Annual Review Meeting 2026" />
+                {errors.eventTitle && <p className="text-xs text-red-500 mt-1 font-bold">{errors.eventTitle}</p>}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Description</label>
+                <textarea rows={3} value={form.eventDescription} onChange={e => setForm(p => ({ ...p, eventDescription: e.target.value }))} className={inputClass('eventDescription')} placeholder="Briefly describe the purpose of this booking..." />
+              </div>
               <Button onClick={() => validateStep(1) && setCurrentStep(2)} className="w-full h-14 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white rounded-xl font-black tracking-widest uppercase shadow-xl shadow-emerald-900/20 transition-all hover:-translate-y-1">CONTINUE TO VENUE</Button>
             </div>
           )}
@@ -340,7 +392,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
             <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
               <div className="grid sm:grid-cols-2 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase block mb-2 tracking-widest flex items-center gap-2"><Building2 size={14}/> Venue Selection *</label>
+                  <label className="text-xs font-medium text-black uppercase block mb-2 tracking-widest flex items-center gap-2"><Building2 size={14}/> Venue Selection *</label>
                 <select value={form.venueId} onChange={e => setForm(p => ({ ...p, venueId: e.target.value }))} className={inputClass('venueId')}>
                   <option value="">Select a hall...</option>
                   {venues?.map(v => (
@@ -356,9 +408,9 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 </select>
                 </div>
                 <div>
-                  <label className={`text-xs font-black uppercase block mb-2 tracking-widest flex items-center gap-2 transition-colors ${isPaxExceeded ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}>
+                  <label className={`text-xs font-medium uppercase block mb-2 tracking-widest flex items-center gap-2 transition-colors ${isPaxExceeded ? 'text-red-500 animate-pulse' : 'text-black'}`}>
                     <Users size={14}/> 
-                    Expected Pax * {isPaxExceeded && <span className="text-[9px] bg-red-100 px-2 py-0.5 rounded text-red-700 ml-auto">Exceeds {selectedVenue?.capacity} limit!</span>}
+                    Expected Pax * {isPaxExceeded && <span className="text-[9px] bg-red-100 px-2 py-0.5 rounded text-red-700 ml-auto font-bold">Exceeds {selectedVenue?.capacity} limit!</span>}
                   </label>
                   <input type="number" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={`${inputClass('participantCount')} ${isPaxExceeded ? 'border-red-400 bg-red-50 text-red-900 ring-4 ring-red-500/20' : ''}`} placeholder="Number of attendees" />
                 </div>
@@ -386,7 +438,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
               {form.dailySchedules?.length > 0 && (
                 <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Time Adjustments per Day</p>
+                  <p className="text-xs font-medium text-black uppercase tracking-widest mb-2">Time Adjustments per Day</p>
                   {form.dailySchedules.map((s, idx) => {
                     const conflict = dailyConflicts.find(c => c.date === s.date);
                     return (
@@ -438,14 +490,13 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                   
                   return (
                     <div key={l} className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
-                      <p className="text-xs font-black text-slate-800 uppercase mb-4 tracking-widest flex items-center gap-2">
+                      <p className="text-xs font-medium text-black uppercase mb-4 tracking-widest flex items-center gap-2">
                         {i === 0 ? <MonitorSmartphone className="text-blue-500"/> : <Coffee className="text-amber-500"/>} 
                         {l} Support
                       </p>
                       <div className="grid gap-3">
                         {list && list.length > 0 ? (
                           list.map(s => {
-                            // --- NEW: Check if it's already included with the hall ---
                             const isIncluded = isServiceIncluded(type, s.id?.toString());
                             const isSelected = formList.includes(s.id?.toString());
                             
@@ -499,7 +550,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                   <Paperclip className="w-8 h-8 text-slate-400 group-hover:text-emerald-500 transition-colors" />
                 </div>
                 <p className="text-sm font-black text-slate-600 uppercase tracking-widest">{form.letterAttachment ? form.letterAttachment.name : 'Attach Official Request (PDF)'}</p>
-                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Required for external organizers</p>
+                <p className="text-xs font-medium text-black mt-2 uppercase tracking-widest">Required for external organizers</p>
               </div>
               <div className="flex justify-between pt-6 border-t border-slate-100">
                 <button onClick={() => setCurrentStep(2)} className="font-black text-slate-400 hover:text-slate-600 uppercase text-xs tracking-widest transition-colors">Back</button>

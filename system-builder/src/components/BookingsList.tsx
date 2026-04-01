@@ -41,15 +41,24 @@ const toEthDateString = (gStr: string | undefined | null) => {
 };
 
 // --- SECURE 24-HOUR VISUAL LOCK CHECK ---
-const isWithin24Hours = (startDate: string, startTime?: string) => {
+const isLockedForEditing = (startDate: string, startTime?: string) => {
   if (!startDate) return false;
   try {
     const d = startDate.split('T')[0];
     const t = startTime || '08:00:00';
+    
+    // Construct valid Date object
     const eventDate = new Date(`${d}T${t}`);
-    const diff = (eventDate.getTime() - Date.now()) / (1000 * 3600);
-    return diff > 0 && diff < 24;
-  } catch { return false; }
+    const now = new Date();
+
+    // Difference in hours
+    const diffInHours = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    // If it's in the past, or less than 24 hours away, it's locked
+    return diffInHours < 24;
+  } catch { 
+    return false; 
+  }
 };
 
 export default function BookingsList() {
@@ -240,8 +249,9 @@ export default function BookingsList() {
             const originalTotal = parseFloat(booking.totalPrice || booking.total_price || 0);
             const revisedTotal = Math.max(0, originalTotal - deductedAmount);
             
-            // Lock Check!
-            const isLocked = isWithin24Hours(startDate, startTime) && ['confirmed', 'approved', 'reserved'].includes(booking.status?.toLowerCase());
+            // LOCK CHECK ENGINE
+            const isLocked = isLockedForEditing(startDate, startTime);
+            const isActiveBooking = ['confirmed', 'approved', 'reserved', 'override'].includes(booking.status?.toLowerCase());
             
             return (
               <div 
@@ -306,10 +316,10 @@ export default function BookingsList() {
                     </div>
                   )}
 
-                  {['reserved', 'approved', 'confirmed'].includes(booking.status?.toLowerCase()) && (
+                  {isActiveBooking && (
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                       {isLocked ? (
-                         <div className="flex items-center justify-center gap-2 text-amber-700 bg-amber-50 px-4 py-2.5 rounded-xl border border-amber-200 w-full">
+                         <div className="flex items-center justify-center gap-2 text-slate-500 bg-slate-100 px-4 py-2.5 rounded-xl border border-slate-200 w-full cursor-not-allowed">
                            <Lock size={14} /> <span className="text-xs font-bold">Locked (Under 24h)</span>
                          </div>
                       ) : (
@@ -334,8 +344,8 @@ export default function BookingsList() {
                     </div>
                   )}
                   
-                  {!['reserved', 'approved', 'confirmed'].includes(booking.status?.toLowerCase()) && (
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-auto">Record Finalized</p>
+                  {!isActiveBooking && (
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-auto bg-slate-50 px-3 py-1.5 rounded-md border border-slate-100">Record Finalized</p>
                   )}
 
                 </div>

@@ -552,13 +552,9 @@ export default function LandingPage() {
 
                 return (
                   <div key={venue.id} className={`group bg-white rounded-[2rem] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col transition-all duration-500 ease-out relative ${isOutOfOrder ? 'opacity-80 grayscale-[0.5]' : 'hover:shadow-[0_40px_80px_rgba(0,0,0,0.08)] hover:-translate-y-2'}`} style={{ animation: `fade-in-up 0.5s cubic-bezier(0.16,1,0.3,1) ${100 * i}ms both` }}>
-                    <div className="relative aspect-[16/10] rounded-[1.5rem] overflow-hidden mb-8 bg-slate-50">
+                    <div className="relative aspect-[16/10] rounded-[1.5rem] overflow-hidden mb-6 bg-slate-50">
                       <img src={venue.image || getVenueImage(venue.type)} alt={venue.name} className={`w-full h-full object-cover transition-transform duration-1000 ease-out ${isOutOfOrder ? '' : 'group-hover:scale-110 grayscale-[0.1] group-hover:grayscale-0'}`} />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-                      <div className="absolute top-4 right-4 bg-white/40 backdrop-blur-xl border border-white/40 px-4 py-2 rounded-2xl text-xs font-black text-white shadow-xl z-10">
-                        {venue.price || '0.00'} ETB/hr
-                      </div>
 
                       {/* OUT OF ORDER BADGE OVERLAY */}
                       {isOutOfOrder && (
@@ -570,6 +566,7 @@ export default function LandingPage() {
                         </div>
                       )}
 
+                      {/* STATUS BADGE (Top Left) */}
                       {!isOutOfOrder && (
                         <div className="absolute top-4 left-4 z-10">
                           {(() => {
@@ -586,24 +583,28 @@ export default function LandingPage() {
                           })()}
                         </div>
                       )}
-
-                      <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/30 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider z-10">
-                        <Users className="w-3.5 h-3.5" /> {venue.capacity} Max
-                      </div>
                     </div>
 
                     <div className="px-3 flex-1 flex flex-col relative z-30">
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center justify-between mb-2">
                         <h3 className={`text-2xl font-bold tracking-tight transition-colors ${isOutOfOrder ? 'text-slate-400 line-through' : 'text-[#111827] group-hover:text-[#268053]'}`}>{venue.name}</h3>
-                        <div className={`p-2 rounded-xl ${isOutOfOrder ? 'bg-slate-100 text-slate-400' : 'bg-emerald-50 text-[#268053]'}`}>
-                          <Building className="w-4 h-4" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mb-8">
                         <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-slate-500 text-[10px] font-black uppercase tracking-widest leading-none">
                           {venue.type}
                         </span>
                       </div>
+                      
+                      {/* HIGHLY VISIBLE PAX AND MONEY BADGES */}
+                      <div className="flex items-center gap-3 mb-6 mt-3">
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border ${isOutOfOrder ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm'}`}>
+                          <Users size={16} className={isOutOfOrder ? 'text-slate-400' : 'text-emerald-500'} /> 
+                          {venue.capacity} Pax
+                        </div>
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border ${isOutOfOrder ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-[#111827] text-amber-400 border-[#111827] shadow-sm'}`}>
+                          <Tag size={16} className={isOutOfOrder ? 'text-slate-400' : 'text-amber-500'} /> 
+                          {venue.price || '0.00'} ETB/Day
+                        </div>
+                      </div>
+
                       <div className="mt-auto pt-6 border-t border-slate-50">
                         <div className="flex flex-col mb-6">
                           <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Upcoming Schedule</span>
@@ -637,7 +638,7 @@ export default function LandingPage() {
                             Venue Unavailable
                           </button>
                         ) : (
-                          <button onClick={() => { if (token) navigate(`/app#/new-booking?venueId=${venue.id}`); else navigate('/login'); }} className="w-full py-5 text-sm font-black bg-[#111827] text-white hover:bg-[#268053] transition-all duration-300 rounded-2xl shadow-xl flex items-center justify-center gap-2 group/btn">
+                          <button onClick={() => navigate(`/book?venueId=${venue.id}`)} className="w-full py-5 text-sm font-black bg-[#111827] text-white hover:bg-[#268053] transition-all duration-300 rounded-2xl shadow-xl flex items-center justify-center gap-2 group/btn">
                             Book This Venue <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
                           </button>
                         )}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ArrowLeft, Ticket, Clock, MapPin, Users, Edit2, XCircle, Info, Phone, AlignLeft, Save, Calendar, Lock } from 'lucide-react';
+import { Search, ArrowLeft, Ticket, Clock, MapPin, Users, Edit2, XCircle, Info, Phone, AlignLeft, Save, Calendar, Lock, AlertTriangle } from 'lucide-react';
 import moaLogo from '@/assets/moa-logo.png';
 import { API_BASE, mapBooking } from '@/lib/app-context';
 import { Booking } from '@/lib/types';
@@ -29,7 +29,7 @@ export default function TrackBookingPage() {
     }
   };
 
-  // NEW: Helper to format military time (23:59) to standard time (11:59 PM)
+  // Helper to format military time (23:59) to standard time (11:59 PM)
   const formatTime = (timeStr: string) => {
     if (!timeStr) return '';
     const [h, m] = timeStr.split(':');
@@ -39,7 +39,6 @@ export default function TrackBookingPage() {
     return `${formattedHr}:${m} ${ampm}`;
   };
 
-  // FIX: Added 'approved' and 'override' so they get their beautiful colors
   const getStatusInfo = (status: string) => {
     switch (status.toLowerCase()) {
       case 'approved': return { label: 'Pending Approval', color: 'bg-amber-100 text-amber-700 border-amber-200' };
@@ -77,24 +76,24 @@ export default function TrackBookingPage() {
     }
   };
 
-  // 24-Hour Visual Lock Check
-  const isWithin24Hours = (startDate: string, startTime?: string) => {
+  // --- BULLETPROOF 24-HOUR LOCK CHECK ---
+  const isLockedForEditing = (startDate: string, startTime?: string) => {
     if (!startDate) return false;
     try {
-      const [y, m, d] = startDate.split('T')[0].split('-').map(Number);
-      const [hr, min] = (startTime || '08:00').split(':').map(Number);
-      const ethDate = new EthDateTime(y, m, d, hr, min, 0);
-      const eventGregorianDate = ethDate.toEuropeanDate();
+      const d = startDate.split('T')[0];
+      const t = startTime || '08:00:00';
+      const eventDate = new Date(`${d}T${t}`);
       const now = new Date();
-      const hoursDifference = (eventGregorianDate.getTime() - now.getTime()) / (1000 * 3600);
-      return hoursDifference > 0 && hoursDifference < 24;
-    } catch (e) {
-      return false;
+      
+      const diffInHours = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      return diffInHours < 24; // Locks if less than 24 hours, or if it's already in the past
+    } catch { 
+      return false; 
     }
   };
 
   const normalizedStatus = booking?.status?.toLowerCase() || '';
-  const isLocked = booking ? isWithin24Hours(booking.startDate, booking.startTime) && ['confirmed', 'approved', 'reserved'].includes(normalizedStatus) : false;
+  const isLocked = booking ? isLockedForEditing(booking.startDate, booking.startTime) && ['confirmed', 'approved', 'reserved'].includes(normalizedStatus) : false;
 
   const handleCancel = async () => {
     if (!booking) return;
@@ -179,6 +178,17 @@ export default function TrackBookingPage() {
         {booking && !isEditing && (
           <div className="bg-white rounded-[2.5rem] shadow-xl p-8 border border-slate-100 animate-in fade-in slide-in-from-bottom-4 relative overflow-hidden">
              
+             {/* --- NEW: VIP OVERRIDE NOTICE --- */}
+             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8 text-left flex gap-3 shadow-inner">
+               <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+               <div>
+                 <p className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-1">Important Policy Notice</p>
+                 <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
+                   As a state facility, high-level Ministerial and VIP events hold supreme priority. Your booking may be subject to overriding or cancellation (with full refund) even after payment is confirmed.
+                 </p>
+               </div>
+             </div>
+
              {/* Header */}
              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-slate-100 pb-8">
                 <div>
@@ -222,7 +232,6 @@ export default function TrackBookingPage() {
                         ? getEthDateString(booking.startDate)
                         : `${getEthDateString(booking.startDate).split(',')[0]} - ${getEthDateString(booking.endDate)}`}
                     </p>
-                    {/* FIX: Formatted AM/PM Time */}
                     <p className="text-sm font-medium text-slate-500 mt-1 flex items-center gap-1">
                       <Clock size={12} /> {formatTime(booking.startTime)} to {formatTime(booking.endTime)}
                     </p>
@@ -242,7 +251,7 @@ export default function TrackBookingPage() {
                 </div>
              )}
 
-             {/* FIX: EDIT AND CANCEL ACTIONS BAR */}
+             {/* EDIT AND CANCEL ACTIONS BAR */}
              {['reserved', 'approved', 'confirmed'].includes(normalizedStatus) && (
                 <div className="flex flex-col sm:flex-row gap-4 pt-8 border-t border-slate-100 mt-4">
                    {isLocked ? (
