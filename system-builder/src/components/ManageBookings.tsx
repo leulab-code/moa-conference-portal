@@ -6,7 +6,7 @@ import { format, parseISO } from 'date-fns';
 import {
   ChevronDown, ChevronUp, Clock, XCircle, Users, MapPin, Calendar,
   FileText, Activity, Trash2, Star, CreditCard, User, Mail, Phone,
-  CheckCircle2, AlertTriangle, Building2, ChevronLeft, ChevronRight, Filter, X
+  CheckCircle2, AlertTriangle, Building2, ChevronLeft, ChevronRight, Filter, X, Crown
 } from 'lucide-react';
 import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
@@ -22,7 +22,8 @@ const statusStyles: Record<string, { bg: string, text: string, label: string, do
   completed: { bg: 'bg-slate-800', text: 'text-white', label: 'Completed', dot: 'bg-white' },
 };
 
-type TabFilter = 'pending' | 'payment' | 'confirmed' | 'rejected' | 'all';
+// Removed 'pending' to combine everything needing admin action into 'payment' (Awaiting Action)
+type TabFilter = 'payment' | 'confirmed' | 'vip' | 'rejected' | 'all';
 
 // --- ETHIOPIAN DATE CONVERTER ---
 const toEthDateString = (gStr: string | undefined | null) => {
@@ -89,9 +90,9 @@ export default function ManageBookings() {
 
   // 2. Calculate dynamic counts based on the filtered results
   const counts = {
-    pending: baseFilteredBookings.filter(b => b.status === 'reserved').length,
-    payment: baseFilteredBookings.filter(b => b.status === 'approved').length,
-    confirmed: baseFilteredBookings.filter(b => ['confirmed', 'override', 'completed'].includes(b.status)).length,
+    payment: baseFilteredBookings.filter(b => ['reserved', 'approved'].includes(b.status)).length,
+    confirmed: baseFilteredBookings.filter(b => ['confirmed', 'completed'].includes(b.status)).length,
+    vip: baseFilteredBookings.filter(b => b.status === 'override').length,
     rejected: baseFilteredBookings.filter(b => ['rejected', 'cancelled'].includes(b.status)).length,
     all: baseFilteredBookings.length,
   };
@@ -99,9 +100,9 @@ export default function ManageBookings() {
   // 3. Finally, apply the Tab (Category) filter for display
   const finalFilteredBookings = baseFilteredBookings.filter(b => {
     if (activeTab === 'all') return true;
-    if (activeTab === 'pending') return b.status === 'reserved';
-    if (activeTab === 'payment') return b.status === 'approved';
-    if (activeTab === 'confirmed') return ['confirmed', 'override', 'completed'].includes(b.status);
+    if (activeTab === 'payment') return ['reserved', 'approved'].includes(b.status);
+    if (activeTab === 'confirmed') return ['confirmed', 'completed'].includes(b.status);
+    if (activeTab === 'vip') return b.status === 'override';
     if (activeTab === 'rejected') return ['rejected', 'cancelled'].includes(b.status);
     return true;
   });
@@ -154,7 +155,7 @@ export default function ManageBookings() {
     }
 
     let msg = `Change status to ${status}?`;
-    if (status === 'override') msg = 'Apply VIP Override? This bypasses standard payment checks and secures the venue.';
+    if (status === 'override') msg = 'Apply VIP Override? This bypasses standard payment checks and secures the venue, automatically cancelling conflicting events.';
     if (status === 'confirmed') msg = 'Confirm that payment has been received?';
 
     if (confirm(msg)) {
@@ -177,7 +178,6 @@ export default function ManageBookings() {
     e.stopPropagation();
     setRejectingId(id);
     setExpandedId(id);
-    // NEW: Default professional rejection reason
     setRejectReason('We regret to inform you that your booking request could not be accommodated. This time slot has been overridden by a high-priority state/ministerial event, or there was a scheduling conflict. We apologize for any inconvenience.');
   };
 
@@ -340,19 +340,19 @@ export default function ManageBookings() {
         </div>
       </div>
 
-      {/* Tab Filters (Categories) */}
+      {/* Tab Filters (Categories) - ONLY 5 TABS NOW */}
       <div className="flex overflow-x-auto pb-2 mb-6 border-b border-slate-200 hide-scrollbar">
-        {(['payment', 'pending', 'confirmed', 'rejected', 'all'] as TabFilter[]).map((tab) => (
+        {(['payment', 'confirmed', 'vip', 'rejected', 'all'] as TabFilter[]).map((tab) => (
           <button
             key={tab}
             onClick={() => { setActiveTab(tab); setExpandedId(null); setRejectingId(null); }}
             className={`whitespace-nowrap px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === tab ? 'border-[#268053] text-[#268053]' : 'border-transparent text-slate-400 hover:text-slate-700 hover:border-slate-300'
               }`}
           >
-            {tab === 'payment' ? 'Awaiting Payment' :
-              tab === 'pending' ? 'Legacy / Review' :
-                tab === 'confirmed' ? 'Confirmed & VIP' :
-                  tab === 'rejected' ? 'Rejected' : 'All Bookings'}
+            {tab === 'payment' ? 'Awaiting Action' :
+             tab === 'confirmed' ? 'Confirmed' :
+             tab === 'vip' ? 'VIP Overrides' :
+             tab === 'rejected' ? 'Rejected' : 'All Bookings'}
             <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs transition-colors ${activeTab === tab ? 'bg-[#268053] text-white' : 'bg-slate-100 text-slate-500'
               }`}>
               {counts[tab]}
@@ -371,7 +371,6 @@ export default function ManageBookings() {
            </div>
         ) : paginatedBookings.map((b, i) => {
 
-          // Standardization
           const safeId = String(b.id);
           const title = b.event_title || b.eventTitle || b.title || 'Untitled Event';
           const orgName = b.organizer_name || b.organizerName || b.name || b.full_name || 'Unknown Organizer';
@@ -381,22 +380,18 @@ export default function ManageBookings() {
           const desc = b.event_description || b.eventDescription || b.description || 'No description provided.';
           const pax = b.participant_count || b.participantCount || b.pax || 0;
 
-          // NEW: Check if it's a VIP booking based on the title flag
           const isVipBooking = title.includes('⭐ [VIP OVERRIDE]');
 
           const startDate = b.start_date || b.startDate || '';
           const endDate = b.end_date || b.endDate || '';
           const attachment = b.letter_attachment || b.letterAttachment || b.attachment;
 
-          // Smart Venue Lookup
           const venueId = b.venue || b.venueId;
           const venue = venues.find(v => String(v.id) === String(venueId));
           const venueName = venue?.name || b.venue_name || b.venueName || 'Unknown Venue';
 
-          // Financials
           const grandTotal = b.totalPrice || b.total_price || 0;
 
-          // Services requested
           const techIds = b.technical_services || b.technicalServices || [];
           const suppIds = b.support_services || b.supportServices || [];
           const allRequestedServices: { id: string, name: string, isUnavailable: boolean, type: 'tech' | 'supp' }[] = [];
@@ -432,7 +427,6 @@ export default function ManageBookings() {
           const hasCateringConflict = b.cateringAcknowledged && allRequestedServices.some(s => s.type === 'supp' && s.isUnavailable);
           const hasAnyConflict = hasTechnicalConflict || hasCateringConflict;
 
-          // Price adjustment for unavailable services
           let unavailableDeduction = 0;
           allRequestedServices.forEach(s => {
             const isShownAsUnavailable = s.isUnavailable && (s.type === 'tech' ? b.ictAcknowledged : b.cateringAcknowledged);
@@ -452,6 +446,11 @@ export default function ManageBookings() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-3 mb-2.5">
+                      {isVipBooking && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-800 border border-amber-200 shadow-sm">
+                          <Crown size={12} /> VIP REQUEST
+                        </span>
+                      )}
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest ${style.bg} ${style.text}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${style.dot} animate-pulse`}></span> {style.label}
                         {hasAnyConflict && (
@@ -483,7 +482,6 @@ export default function ManageBookings() {
                     {/* Approve / VIP / Reject Buttons */}
                     {['reserved', 'approved'].includes(b.status) && !isRejecting && (
                       <>
-                        {/* NORMAL BOOKING sees Confirm Paid, VIP BOOKING sees VIP Override */}
                         {!isVipBooking ? (
                           <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'confirmed', e)}>
                             <CreditCard className="w-4 h-4 mr-2" /> Confirm Paid
