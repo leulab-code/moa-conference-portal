@@ -44,7 +44,7 @@ export default function ManageBookings() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  // NEW: Advanced Filtering State
+  // Advanced Filtering State
   const [filterVenue, setFilterVenue] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -56,20 +56,18 @@ export default function ManageBookings() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, filterVenue, filterDate, filterStatus]); // Reset to page 1 when any filter changes
+  }, [activeTab, filterVenue, filterDate, filterStatus]);
 
   const [clashWarning, setClashWarning] = useState<{ isOpen: boolean, clashingBooking: Booking | null, attemptedAction?: { id: string, status: string } }>({ isOpen: false, clashingBooking: null });
 
   // 1. First apply Venue, Date, and Specific Status filters
   const baseFilteredBookings = bookings.filter(b => {
-    // Venue Filter
     let venueMatch = true;
     if (filterVenue !== 'all') {
       const bVenue = b.venue || b.venueId;
       venueMatch = String(bVenue) === String(filterVenue);
     }
 
-    // Date Filter (Checks if filterDate falls within start and end date)
     let dateMatch = true;
     if (filterDate) {
       const start = b.start_date || b.startDate;
@@ -81,7 +79,6 @@ export default function ManageBookings() {
       }
     }
 
-    // Status Filter (Dropdown)
     let statusMatch = true;
     if (filterStatus !== 'all') {
       statusMatch = b.status === filterStatus;
@@ -157,7 +154,7 @@ export default function ManageBookings() {
     }
 
     let msg = `Change status to ${status}?`;
-    if (status === 'override') msg = 'Apply VIP Override? This bypasses standard payment checks.';
+    if (status === 'override') msg = 'Apply VIP Override? This bypasses standard payment checks and secures the venue.';
     if (status === 'confirmed') msg = 'Confirm that payment has been received?';
 
     if (confirm(msg)) {
@@ -180,7 +177,8 @@ export default function ManageBookings() {
     e.stopPropagation();
     setRejectingId(id);
     setExpandedId(id);
-    setRejectReason('');
+    // NEW: Default professional rejection reason
+    setRejectReason('We regret to inform you that your booking request could not be accommodated. This time slot has been overridden by a high-priority state/ministerial event, or there was a scheduling conflict. We apologize for any inconvenience.');
   };
 
   const handleConfirmReject = (id: string, e: React.MouseEvent) => {
@@ -212,7 +210,7 @@ export default function ManageBookings() {
               </div>
               <h2 className="text-3xl font-serif font-black text-center text-slate-800 mb-2 tracking-tight">Scheduling Clash!</h2>
               <p className="text-center text-slate-500 font-medium mb-8 leading-relaxed px-4">
-                You cannot confirm this request because the venue is already PAID FOR by someone else during this exact time.
+                You cannot confirm this request because the venue is already secured by someone else during this exact time.
               </p>
 
               <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 shadow-inner">
@@ -261,7 +259,7 @@ export default function ManageBookings() {
         <p className="text-muted-foreground mt-2">Verify payments on pending requests, or apply VIP overrides.</p>
       </div>
 
-      {/* NEW: Filter Bar */}
+      {/* Filter Bar */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-slate-500">
           <Filter className="w-4 h-4" />
@@ -383,6 +381,9 @@ export default function ManageBookings() {
           const desc = b.event_description || b.eventDescription || b.description || 'No description provided.';
           const pax = b.participant_count || b.participantCount || b.pax || 0;
 
+          // NEW: Check if it's a VIP booking based on the title flag
+          const isVipBooking = title.includes('⭐ [VIP OVERRIDE]');
+
           const startDate = b.start_date || b.startDate || '';
           const endDate = b.end_date || b.endDate || '';
           const attachment = b.letter_attachment || b.letterAttachment || b.attachment;
@@ -482,12 +483,17 @@ export default function ManageBookings() {
                     {/* Approve / VIP / Reject Buttons */}
                     {['reserved', 'approved'].includes(b.status) && !isRejecting && (
                       <>
-                        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'confirmed', e)}>
-                          <CreditCard className="w-4 h-4 mr-2" /> Confirm Paid
-                        </Button>
-                        <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'override', e)}>
-                          <Star className="w-4 h-4 mr-2" /> VIP Override
-                        </Button>
+                        {/* NORMAL BOOKING sees Confirm Paid, VIP BOOKING sees VIP Override */}
+                        {!isVipBooking ? (
+                          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'confirmed', e)}>
+                            <CreditCard className="w-4 h-4 mr-2" /> Confirm Paid
+                          </Button>
+                        ) : (
+                          <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'override', e)}>
+                            <Star className="w-4 h-4 mr-2" /> Approve VIP Override
+                          </Button>
+                        )}
+
                         <Button variant="outline" className="text-red-600 hover:bg-red-50 border-red-200" onClick={(e) => handleInitReject(safeId, e)}>
                           <XCircle className="w-4 h-4" />
                         </Button>
@@ -509,7 +515,7 @@ export default function ManageBookings() {
 
                   {isRejecting && (
                     <div className="mb-8 bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm">
-                      <h4 className="font-bold text-red-900 mb-3 flex items-center gap-2"><XCircle className="w-5 h-5" /> Reason for Rejection</h4>
+                      <h4 className="font-bold text-red-900 mb-3 flex items-center gap-2"><XCircle className="w-5 h-5" /> Reason for Cancellation/Rejection</h4>
                       <textarea autoFocus value={rejectReason} onChange={e => setRejectReason(e.target.value)} className="w-full text-sm border border-red-200 rounded-lg p-4 shadow-inner resize-none focus:outline-none focus:ring-2 focus:ring-red-500" rows={3} placeholder="Please provide the exact reason why this is rejected. The user will see this." />
                       <div className="flex justify-end gap-3 mt-4">
                         <Button variant="ghost" onClick={(e) => { e.stopPropagation(); setRejectingId(null); }}>Cancel</Button>

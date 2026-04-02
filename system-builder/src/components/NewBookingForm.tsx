@@ -4,7 +4,7 @@ import { DailySchedule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { format, parseISO, eachDayOfInterval } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Eraser, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Eraser, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock, Crown } from 'lucide-react';
 import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 
@@ -27,7 +27,6 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   const [currentStep, setCurrentStep] = useState(1);
   const [submittedBookingId, setSubmittedBookingId] = useState<string | null>(null);
   
-  // --- NEW: Read venueId from the URL on initial load ---
   const initialVenueId = useMemo(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -46,6 +45,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     organizerEmail: user?.email || '', 
     organizerPhone: user?.phone || '',
     startDate: '', endDate: '', participantCount: '', 
+    isVip: false, // NEW: VIP Flag
     technicalServices: [] as string[], supportServices: [] as string[],
     dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
   });
@@ -197,9 +197,14 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     } else if (step === 2) {
       if (!form.venueId) errs.venueId = 'Select a venue';
       if (!form.startDate) errs.startDate = 'Required';
-      if (selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity) {
-        errs.participantCount = `Capacity exceeded (Max: ${selectedVenue.capacity})`;
+      
+      // STRICT PAX VALIDATION
+      if (!form.participantCount || isNaN(parseInt(form.participantCount)) || parseInt(form.participantCount) <= 0) {
+        errs.participantCount = 'Required';
+      } else if (selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity) {
+        errs.participantCount = `Max: ${selectedVenue.capacity} allowed`;
       }
+
       if (dailyConflicts.some(c => c.type === 'hard_overlap' || c.type === 'cleaning')) {
         errs.rangeConflict = 'Please resolve hard time conflicts below.';
       }
@@ -218,10 +223,13 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     setIsSubmitting(true);
     try {
       const finalTotal = venueTotal + serviceFee;
+      
+      // Prepend VIP flag to the title so admins clearly see it
+      const finalTitle = form.isVip ? `⭐ [VIP OVERRIDE] ${form.eventTitle}` : form.eventTitle;
 
       const payload = {
         ...form, 
-        status: 'approved',
+        status: 'reserved', // ALWAYS defaults to reserved (pending admin approval)
         name: form.organizerName,
         full_name: form.organizerName,
         organizer_name: form.organizerName,
@@ -239,8 +247,8 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
         total_price: finalTotal,
         venueId: form.venueId,
         venue: form.venueId,
-        eventTitle: form.eventTitle,
-        event_title: form.eventTitle,
+        eventTitle: finalTitle,
+        event_title: finalTitle,
         eventDescription: form.eventDescription,
         event_description: form.eventDescription,
         startDate: form.startDate,
@@ -271,8 +279,6 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
   const inputClass = (f: string) => `w-full text-sm border-2 rounded-xl px-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white transition-all focus:ring-4 focus:ring-[#268053]/10 outline-none ${errors[f] ? 'border-red-300 focus:border-red-400 bg-red-50/20' : 'border-slate-100 focus:border-[#268053]'}`;
 
-  const isPaxExceeded = selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity;
-
   if (submittedBookingId) {
     const isGuest = !token;
 
@@ -284,10 +290,10 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
            <h2 className="text-4xl font-black text-slate-800 mb-2 uppercase tracking-tight">Request Submitted!</h2>
            
            <p className="text-slate-500 font-bold text-sm mb-6 leading-relaxed px-4">
-             Your slot is reserved under <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Awaiting Payment</span>.<br/> First to pay secures the venue!
+             Your slot is reserved under <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Admin Review</span>.<br/> You will be notified upon confirmation.
            </p>
 
-           {/* --- NEW: VIP OVERRIDE NOTICE --- */}
+           {/* VIP OVERRIDE NOTICE */}
            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8 text-left flex gap-3 shadow-inner">
              <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
              <div>
@@ -384,6 +390,18 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Description</label>
                 <textarea rows={3} value={form.eventDescription} onChange={e => setForm(p => ({ ...p, eventDescription: e.target.value }))} className={inputClass('eventDescription')} placeholder="Briefly describe the purpose of this booking..." />
               </div>
+              
+              {/* VIP STATE OVERRIDE TOGGLE */}
+              <div className={`mt-4 p-5 border-2 rounded-2xl flex items-start gap-4 transition-all cursor-pointer ${form.isVip ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-200 hover:border-amber-200'}`} onClick={() => setForm(p => ({...p, isVip: !p.isVip}))}>
+                <div className={`w-6 h-6 rounded border flex items-center justify-center shrink-0 mt-0.5 ${form.isVip ? 'bg-amber-500 border-amber-600' : 'bg-white border-slate-300'}`}>
+                  {form.isVip && <CheckCircle2 className="w-4 h-4 text-white" />}
+                </div>
+                <div>
+                  <p className="text-sm font-black text-amber-900 uppercase tracking-widest flex items-center gap-2"><Crown size={16} /> Request VIP State Override</p>
+                  <p className="text-xs font-bold text-amber-700/80 mt-1 leading-relaxed">Flag this booking as a high-priority state event. It will be prioritized but remains pending until an admin manually reviews and overrides the schedule.</p>
+                </div>
+              </div>
+
               <Button onClick={() => validateStep(1) && setCurrentStep(2)} className="w-full h-14 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white rounded-xl font-black tracking-widest uppercase shadow-xl shadow-emerald-900/20 transition-all hover:-translate-y-1">CONTINUE TO VENUE</Button>
             </div>
           )}
@@ -408,11 +426,11 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 </select>
                 </div>
                 <div>
-                  <label className={`text-xs font-medium uppercase block mb-2 tracking-widest flex items-center gap-2 transition-colors ${isPaxExceeded ? 'text-red-500 animate-pulse' : 'text-black'}`}>
-                    <Users size={14}/> 
-                    Expected Pax * {isPaxExceeded && <span className="text-[9px] bg-red-100 px-2 py-0.5 rounded text-red-700 ml-auto font-bold">Exceeds {selectedVenue?.capacity} limit!</span>}
+                  <label className={`text-xs font-medium uppercase block mb-2 tracking-widest flex items-center gap-2 transition-colors ${errors.participantCount ? 'text-red-600 animate-pulse' : 'text-black'}`}>
+                    <Users size={14}/> Expected Pax *
+                    {errors.participantCount && <span className="text-[9px] bg-red-100 px-2 py-0.5 rounded text-red-700 ml-auto font-bold">{errors.participantCount}</span>}
                   </label>
-                  <input type="number" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={`${inputClass('participantCount')} ${isPaxExceeded ? 'border-red-400 bg-red-50 text-red-900 ring-4 ring-red-500/20' : ''}`} placeholder="Number of attendees" />
+                  <input type="number" min="1" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={`${inputClass('participantCount')} ${errors.participantCount ? 'border-red-400 bg-red-50 text-red-900 ring-4 ring-red-500/20' : ''}`} placeholder="Number of attendees" />
                 </div>
               </div>
 
