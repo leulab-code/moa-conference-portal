@@ -45,7 +45,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     organizerEmail: user?.email || '', 
     organizerPhone: user?.phone || '',
     startDate: '', endDate: '', participantCount: '', 
-    isVip: false, // NEW: VIP Flag
+    isVip: false, // VIP FLAG
     technicalServices: [] as string[], supportServices: [] as string[],
     dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
   });
@@ -229,7 +229,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
       const payload = {
         ...form, 
-        status: 'reserved', // ALWAYS defaults to reserved (pending admin approval)
+        status: 'reserved', // FORCE PENDING REVIEW NO MATTER WHAT
         name: form.organizerName,
         full_name: form.organizerName,
         organizer_name: form.organizerName,
