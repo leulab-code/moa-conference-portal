@@ -4,7 +4,7 @@ import { useApp } from '@/lib/app-context';
 import { DailySchedule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { format, parseISO, eachDayOfInterval } from 'date-fns';
+import { format, parseISO, eachDayOfInterval, startOfDay } from 'date-fns';
 import { Paperclip, Star, AlertTriangle, UserPlus, Info } from 'lucide-react';
 import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
@@ -50,7 +50,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     } catch { return gregStr; }
   };
 
-  const selectedVenue = venues.find(v => v.id === form.venueId);
+  const selectedVenue = venues.find(v => v.id?.toString() === form.venueId?.toString());
 
   const bookedDates = useMemo(() => {
     if (!form.venueId) return [];
@@ -65,7 +65,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     return dates;
   }, [bookings, form.venueId]);
 
-  // Use the same existing schedules logic from normal form to calculate gaps
   const existingSchedules = useMemo(() => {
     if (!form.venueId) return [];
     const vBookings = bookings?.filter(b => 
@@ -91,7 +90,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     return schedules;
   }, [bookings, form.venueId]);
 
-  // NEW: Updated 1-hour cleaning logic
   const dailyConflicts = useMemo(() => {
     const issues: { date: string, type: 'hard_overlap' | 'soft_overlap' | 'cleaning', msg: string }[] = [];
     
@@ -102,7 +100,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
       const nEnd = timeToMinutes(newSched.endTime || '12:00');
       
       let hasHard = false;
-      let hasSoft = false;
       let cleanMsg = '';
 
       dayExisting.forEach(ex => {
@@ -111,7 +108,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
         
         if (nStart < eEnd && nEnd > eStart) {
           if (ex.isHard) hasHard = true;
-          else hasSoft = true;
         } else {
           const gapAfter = nStart - eEnd;
           const gapBefore = eStart - nEnd;
@@ -120,7 +116,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
         }
       });
 
-      // VIPs overwrite soft overlaps, but we still warn them about Hard overlaps and Cleaning
       if (hasHard || (newSched.allDay && dayExisting.some(ex => ex.isHard))) {
          issues.push({ date: newSched.date, type: 'hard_overlap', msg: 'Unavailable (Already Confirmed/Paid)' });
       } else if (cleanMsg) {
@@ -155,7 +150,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
   };
 
   const serviceFee = useMemo(() => {
-    return [...form.technicalServices, ...form.supportServices].reduce((sum, id) => sum + (servicePrices[[...technicalServices, ...supportServices].find(x => x.id === id)?.name || ''] || 0), 0);
+    return [...form.technicalServices, ...form.supportServices].reduce((sum, id) => sum + (servicePrices[[...technicalServices, ...supportServices].find(x => x.id?.toString() === id?.toString())?.name || ''] || 0), 0);
   }, [form.technicalServices, form.supportServices, technicalServices, supportServices, servicePrices]);
 
   const venueFee = (selectedVenue?.price || 0) * (form.dailySchedules.length || 1);
@@ -168,19 +163,36 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
       if (!form.eventTitle.trim()) errs.eventTitle = 'Event Title is required';
     } else if (step === 2) {
       if (!form.venueId) errs.venueId = 'Please select a venue';
-      if (!form.participantCount) errs.participantCount = 'Required';
-      if (!form.startDate || !form.endDate) errs.startDate = 'Dates are required';
+      
+      if (!form.startDate || !form.endDate) {
+         errs.startDate = 'Dates are required';
+      } else {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedStart = new Date(form.startDate);
+        selectedStart.setHours(0, 0, 0, 0);
+        if (selectedStart < today) {
+          errs.startDate = 'Past dates cannot be booked';
+        }
+      }
+
+      // STRICT PAX VALIDATION
+      if (!form.participantCount || isNaN(parseInt(form.participantCount)) || parseInt(form.participantCount) <= 0) {
+        errs.participantCount = 'Required';
+      } else if (selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity) {
+        errs.participantCount = `Max: ${selectedVenue.capacity} allowed`;
+      }
 
       setClashWarning(null);
-      if (form.venueId && form.startDate && form.endDate) {
+      if (form.venueId && form.startDate && form.endDate && !errs.startDate) {
         const vipConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'override' && b.startDate <= form.endDate && b.endDate >= form.startDate);
         if (vipConflict) {
            errs.startDate = 'This date is already secured by another VIP Override.';
            toast.error('Another VIP has already secured these dates!');
         } else {
-           const regConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && ['confirmed', 'approved', 'reserved'].includes(b.status.toLowerCase()) && b.startDate <= form.endDate && b.endDate >= form.startDate);
+           const regConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && ['confirmed', 'approved', 'reserved', 'paid', 'partial_paid', 'pending'].includes(b.status.toLowerCase()) && b.startDate <= form.endDate && b.endDate >= form.startDate);
            if (regConflict) {
-              setClashWarning(`Warning: This VIP booking overlaps with "${regConflict.eventTitle}". Proceeding will automatically cancel their booking.`);
+              setClashWarning(`Warning: This VIP booking overlaps with "${regConflict.eventTitle || regConflict.event_title}". Proceeding will automatically cancel their booking.`);
            }
         }
       }
@@ -218,7 +230,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     });
   };
 
-  // NEW: Updated to match normal form (13 hours)
   const generateHourOptions = () => Array.from({ length: 13 }, (_, i) => {
     const h = (i).toString().padStart(2, '0') + ':00'; 
     return <option key={h} value={h}>{h}</option>;
@@ -316,7 +327,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
                 <select value={form.venueId} onChange={e => setForm(p => ({ ...p, venueId: e.target.value }))} className={inputClass('venueId')}>
                   <option value="">Choose...</option>
                   {venues.map(v => {
-                    // @ts-ignore
                     const isBroken = v.status === 'out_of_order';
                     return (
                       <option key={v.id} value={v.id} disabled={isBroken}>
@@ -327,19 +337,49 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
                 </select>
                 {errors.venueId && <p className="text-xs text-red-500 mt-1 font-bold">{errors.venueId}</p>}
               </div>
-              <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Attendees *</label><input type="number" min="1" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={inputClass('participantCount')} />{errors.participantCount && <p className="text-xs text-red-500 mt-1 font-bold">{errors.participantCount}</p>}</div>
+              <div>
+                 <label className={`text-[10px] font-bold uppercase mb-2 block transition-colors ${errors.participantCount ? 'text-red-500' : 'text-slate-400'}`}>
+                    Attendees * {errors.participantCount && <span className="text-red-500 ml-2">{errors.participantCount}</span>}
+                 </label>
+                 <input type="number" min="1" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={inputClass('participantCount')} />
+              </div>
             </div>
 
             <div className="flex flex-col md:flex-row gap-8 items-start bg-slate-50 p-6 rounded-2xl border border-slate-100">
-               <EthiopianCalendar selected={{ from: form.startDate ? parseISO(form.startDate) : undefined, to: form.endDate ? parseISO(form.endDate) : undefined }} onSelect={(range) => setForm(p => ({ ...p, startDate: range?.from ? format(range.from, 'yyyy-MM-dd') : '', endDate: range?.to ? format(range.to, 'yyyy-MM-dd') : '' }))} bookedDates={bookedDates} />
+               <EthiopianCalendar 
+                 selected={{ from: form.startDate ? parseISO(form.startDate) : undefined, to: form.endDate ? parseISO(form.endDate) : undefined }} 
+                 onSelect={(range) => {
+                   if (range?.from) {
+                     const today = startOfDay(new Date());
+                     const selectedDate = startOfDay(range.from);
+                     if (selectedDate < today) {
+                       toast.error("You cannot book a date in the past.");
+                       return;
+                     }
+                   }
+                   setForm(p => ({ ...p, startDate: range?.from ? format(range.from, 'yyyy-MM-dd') : '', endDate: range?.to ? format(range.to, 'yyyy-MM-dd') : '' }))
+                 }} 
+                 bookedDates={bookedDates} 
+               />
                <div className="flex-1 w-full space-y-4">
-                  <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Start Date</label><div className={`px-4 py-3 bg-white border rounded-lg text-sm font-bold ${errors.startDate ? 'border-red-300' : 'border-slate-200'}`}>{form.startDate ? getEthDateString(form.startDate) : '...'}</div>{errors.startDate && <p className="text-xs text-red-500 mt-1 font-bold">{errors.startDate}</p>}</div>
-                  <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">End Date</label><div className="px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold">{form.endDate ? getEthDateString(form.endDate) : '...'}</div></div>
+                 <div>
+                   <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Start Date</label>
+                   <div className={`px-4 py-3 bg-white border rounded-lg text-sm font-bold ${errors.startDate ? 'border-red-300 bg-red-50 text-red-700' : 'border-slate-200 text-slate-700'}`}>
+                     {form.startDate ? getEthDateString(form.startDate) : '...'}
+                   </div>
+                   {errors.startDate && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1 text-center">{errors.startDate}</p>}
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">End Date</label>
+                   <div className="px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700">
+                     {form.endDate ? getEthDateString(form.endDate) : '...'}
+                   </div>
+                 </div>
                </div>
             </div>
 
             {clashWarning && (
-              <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 flex gap-3">
+              <div className="bg-amber-50 text-amber-700 p-4 rounded-xl border border-amber-200 flex gap-3 animate-in pop-in">
                 <AlertTriangle className="w-5 h-5 shrink-0" />
                 <p className="text-sm font-bold">{clashWarning}</p>
               </div>
@@ -359,7 +399,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
                       <select value={schedule.endTime.substring(0, 5)} onChange={e => updateSchedule(idx, 'endTime', e.target.value)} className="bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold">{generateHourOptions()}</select>
                     </div>
 
-                    {/* NEW: Displays cleaning gap warnings directly under the time selectors */}
                     {conflict && conflict.type === 'cleaning' && (
                       <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest mt-1">
                         <Info size={12}/> {conflict.msg}
@@ -381,13 +420,13 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
           <div className="space-y-6 animate-in fade-in">
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {technicalServices.map(s => {
-                  const isIncluded = isServiceIncluded('technicalServices', s.id);
-                  const isSelected = form.technicalServices.includes(s.id);
+                  const isIncluded = isServiceIncluded('technicalServices', s.id?.toString() || '');
+                  const isSelected = form.technicalServices.includes(s.id?.toString() || '');
                   
                   return (
                     <div 
                       key={s.id} 
-                      onClick={() => !isIncluded && toggleService('technicalServices', s.id)} 
+                      onClick={() => !isIncluded && toggleService('technicalServices', s.id?.toString() || '')} 
                       className={`p-4 rounded-2xl border-2 transition-all duration-300 ${
                         isIncluded 
                           ? 'border-emerald-200 bg-emerald-50/40 opacity-90 cursor-not-allowed'
@@ -414,8 +453,8 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-8 mb-4">Hospitality Services</h3>
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {supportServices.map(s => (
-                  <div key={s.id} onClick={() => toggleService('supportServices', s.id)} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${form.supportServices.includes(s.id) ? 'border-amber-600 bg-amber-50 shadow-md scale-[1.02]' : 'border-slate-100 hover:border-amber-200 hover:bg-slate-50'}`}>
-                     <p className={`text-xs font-black uppercase tracking-tight py-1 ${form.supportServices.includes(s.id) ? 'text-amber-900' : 'text-slate-600'}`}>{s.name}</p>
+                  <div key={s.id} onClick={() => toggleService('supportServices', s.id?.toString() || '')} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${form.supportServices.includes(s.id?.toString() || '') ? 'border-amber-600 bg-amber-50 shadow-md scale-[1.02]' : 'border-slate-100 hover:border-amber-200 hover:bg-slate-50'}`}>
+                     <p className={`text-xs font-black uppercase tracking-tight py-1 ${form.supportServices.includes(s.id?.toString() || '') ? 'text-amber-900' : 'text-slate-600'}`}>{s.name}</p>
                      <p className="text-[10px] font-bold text-slate-400 mt-1">ETB {s.price}</p>
                   </div>
                 ))}
@@ -425,6 +464,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
                 <input id="file" type="file" className="hidden" accept=".pdf" onChange={handleFileChange} />
                 <Paperclip className="mx-auto text-slate-400 mb-2" />
                 <p className="text-sm font-bold">{form.letterAttachment ? form.letterAttachment.name : 'Attach Official Mandate (Optional)'}</p>
+                <p className="text-xs font-medium text-black mt-2 uppercase tracking-widest">Required for external organizers</p>
              </div>
 
              <div className="flex gap-4 mt-8">
