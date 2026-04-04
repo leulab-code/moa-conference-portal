@@ -33,7 +33,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     venueId: '', eventTitle: '', eventDescription: '', organizerName: '', organizerOrganization: '', organizerEmail: '', organizerPhone: '',
     startDate: '', endDate: '', participantCount: '', technicalServices: [] as string[], supportServices: [] as string[],
     dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
-    status: 'approved', // FIXED: VIP override is now "approved" in the backend!
+    status: 'pending', // FIXED: Starts as pending so it lands in the Admin Dashboard!
     asGuest: !user, 
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -55,7 +55,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
   const bookedDates = useMemo(() => {
     if (!form.venueId) return [];
     const dates: Date[] = [];
-    // FIXED: Look for 'approved' instead of 'override'
     bookings.filter(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'approved')
     .forEach(b => {
       try {
@@ -68,7 +67,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
 
   const existingSchedules = useMemo(() => {
     if (!form.venueId) return [];
-    // FIXED: Using new active statuses
     const vBookings = bookings?.filter(b => 
       b.venueId?.toString() === form.venueId?.toString() && 
       ['pending', 'partial_paid', 'paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '')
@@ -76,7 +74,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     
     const schedules: { date: string, start: string, end: string, isHard: boolean }[] = [];
     vBookings?.forEach(b => {
-      // FIXED: Hard bookings are now paid or approved
       const isHard = ['paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '');
       
       if (b.dailySchedules && b.dailySchedules.length > 0) {
@@ -187,13 +184,11 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
 
       setClashWarning(null);
       if (form.venueId && form.startDate && form.endDate && !errs.startDate) {
-        // FIXED: VIP conflict checks for 'approved'
         const vipConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'approved' && b.startDate <= form.endDate && b.endDate >= form.startDate);
         if (vipConflict) {
            errs.startDate = 'This date is already secured by another VIP Override.';
            toast.error('Another VIP has already secured these dates!');
         } else {
-           // FIXED: Regular conflict checks for pending, partial_paid, paid
            const regConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && ['pending', 'partial_paid', 'paid'].includes(b.status.toLowerCase()) && b.startDate <= form.endDate && b.endDate >= form.startDate);
            if (regConflict) {
               setClashWarning(`Warning: This VIP booking overlaps with "${regConflict.eventTitle || regConflict.event_title}". Proceeding will automatically cancel their booking.`);
@@ -220,7 +215,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
 
       const payload = {
         ...form, 
-        status: 'approved', // FIXED: explicitly inject approved status
+        status: 'pending', // FIXED: Send as pending so Admin sees it and can trigger the override
         name: form.organizerName,
         full_name: form.organizerName,
         organizer_name: form.organizerName,
@@ -256,7 +251,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
 
       const data = await addBooking(payload);
       setSubmittedBookingId(data.id || data.reference_id || data.pk || 'UNKNOWN');
-      toast.success('VIP Override Successful!');
+      toast.success('VIP Booking Requested Successfully!');
     } catch (error) { toast.error('Submission error'); }
   };
 
@@ -285,9 +280,9 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
          <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-8">
            <Star className="w-12 h-12 text-purple-600" />
          </div>
-         <h2 className="text-3xl font-serif font-black text-slate-800 mb-3 tracking-tight">VIP Slot Secured!</h2>
+         <h2 className="text-3xl font-serif font-black text-slate-800 mb-3 tracking-tight">VIP Request Sent!</h2>
          <p className="text-slate-500 font-medium mb-8 text-sm">
-           This event has been forcefully prioritized in the system. Any overlapping events have been automatically cancelled.
+           This event has been sent to the Admin Dashboard. Once approved by the administrator, any overlapping events will be automatically cancelled.
          </p>
          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-10 shadow-inner">
            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">VIP Booking Reference</p>
@@ -324,7 +319,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
         </div>
         <div>
           <h1 className="text-3xl font-black tracking-tight uppercase">VIP Priority Booking</h1>
-          <p className="text-purple-200 font-medium text-sm mt-1">Directly secure venue slots for high-priority officials.</p>
+          <p className="text-purple-200 font-medium text-sm mt-1">Submit a high-priority request for administrative override.</p>
         </div>
       </div>
 
@@ -382,7 +377,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
               </div>
               <div>
                  <label className={`text-[10px] font-bold uppercase mb-2 block transition-colors ${errors.participantCount ? 'text-red-500' : 'text-slate-400'}`}>
-                    Attendees * {errors.participantCount && <span className="text-red-500 ml-2">{errors.participantCount}</span>}
+                   Attendees * {errors.participantCount && <span className="text-red-500 ml-2">{errors.participantCount}</span>}
                  </label>
                  <input type="number" min="1" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={inputClass('participantCount')} />
               </div>
@@ -520,7 +515,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
         {currentStep === 4 && (
           <div className="space-y-6 animate-in fade-in">
             <div className="bg-purple-50 text-purple-900 rounded-2xl p-8 border border-purple-200">
-               <h3 className="text-2xl font-black mb-4">Confirm VIP Override</h3>
+               <h3 className="text-2xl font-black mb-4">Request VIP Override</h3>
                <p className="mb-2"><strong>Event:</strong> {form.eventTitle}</p>
                <p className="mb-2"><strong>Venue:</strong> {selectedVenue?.name}</p>
                <p className="mb-6"><strong>Total Due:</strong> {totalPayable.toFixed(2)} ETB</p>
@@ -528,7 +523,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
                <div className="flex gap-4">
                  <Button variant="outline" onClick={prevStep} className="flex-1 bg-white font-bold h-14 rounded-xl border-purple-200 text-purple-700 hover:bg-purple-100">Back</Button>
                  <Button onClick={handleSubmit} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold h-14 rounded-xl shadow-xl shadow-purple-600/30">
-                   FORCE OVERRIDE
+                   SUBMIT FOR ADMIN REVIEW
                  </Button>
                </div>
             </div>
