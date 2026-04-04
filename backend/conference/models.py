@@ -101,14 +101,13 @@ class SupportService(models.Model):
 # ---------------------------------------------------------------------------
 
 class BookingStatus(models.TextChoices):
-    RESERVED = 'reserved', 'Reserved (Pending)'
-    APPROVED = 'approved', 'Approved (Awaiting Payment)'
-    CONFIRMED = 'confirmed', 'Confirmed (Paid)'
-    OVERRIDE = 'override', 'VIP Override'
-    REJECTED = 'rejected', 'Rejected'
-    CANCELLED = 'cancelled', 'Cancelled'
+    PENDING = 'pending', 'Pending / Awaiting Action'
+    PARTIAL_PAID = 'partial_paid', '1st Round Paid'
+    PAID = 'paid', 'Fully Paid'
+    APPROVED = 'approved', 'VIP Approved'
+    REJECTED = 'rejected', 'Rejected (e.g. VIP Override)'
+    CANCELLED = 'cancelled', 'Cancelled by User/Admin'
     COMPLETED = 'completed', 'Completed'
-
 
 class Booking(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='user_bookings')
@@ -130,7 +129,7 @@ class Booking(models.Model):
     status = models.CharField(
         max_length=20,
         choices=BookingStatus.choices,
-        default=BookingStatus.RESERVED,
+        default=BookingStatus.PENDING,
     )
     
     technical_services = models.ManyToManyField(
@@ -215,9 +214,13 @@ class MaintenanceUpdate(models.Model):
 
 class EmailTemplate(models.Model):
     TRIGGER_CHOICES = [
-        ('approved', 'Approval (Pending Payment)'),
-        ('confirmed', 'Payment Confirmed'),
-        ('rejected', 'Booking Rejected'),
+        ('pending', 'Booking Received (Pending)'),
+        ('partial_paid', '1st Round Payment Confirmed'),
+        ('paid', 'Full Payment Confirmed'),
+        ('approved', 'VIP Override Approved'),
+        ('rejected', 'Booking Rejected / Overridden'),
+        ('cancelled', 'Booking Cancelled'),
+        ('completed', 'Event Completed'),
         ('reminder_24h', '24h Event Reminder'),
         ('reminder_48h_pay', '48h Payment Expiration'),
         ('last_day', 'Meeting Conclusion'),
