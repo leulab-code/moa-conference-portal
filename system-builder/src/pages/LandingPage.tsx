@@ -220,7 +220,6 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
                     <span className="text-xs font-bold text-slate-700 group-hover/item:text-emerald-700">{getFullEthDate(b.startDate)}</span>
                   </div>
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight group-hover/item:text-emerald-600 flex items-center gap-1.5">
-                    {/* NEW: Explicitly Show Confirmed vs Pending */}
                     <span className={`px-1.5 py-0.5 rounded text-[8px] ${isConfirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {isConfirmed ? 'Confirmed' : 'Pending'}
                     </span>
@@ -265,7 +264,6 @@ export default function LandingPage() {
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
 
-  // VIP Logic Filter (Admins can see and book, users just see the badge)
   const isPrivilegedUser = ['leadership', 'system_admin', 'event_management'].includes(role || '');
 
   useEffect(() => {
@@ -289,7 +287,6 @@ export default function LandingPage() {
     fetchPublicBookings();
   }, []);
 
-  // NEW: Updated to match the actual DB statuses!
   const ACTIVE_STATUSES = ['pending', 'partial_paid', 'paid', 'approved'];
 
   const getVenueStatus = (venueId: string) => {
@@ -542,7 +539,6 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
               {venues.map((venue, i) => {
                 const isOutOfOrder = venue.status === 'out_of_order';
-                // VIP Identifier Check
                 const isVipVenue = (venue.name || '').toLowerCase().includes('vip');
                 
                 const purposes = (venue.bestFor || venue.best_for || 'General Facility').split(',').map((p: string) => p.trim()).filter(Boolean);
@@ -611,11 +607,21 @@ export default function LandingPage() {
                       </div>
 
                       <div className="mt-auto pt-6 border-t border-slate-50">
+                        
+                        {/* --- FIXED: Hide Schedule entirely if it's a VIP Venue --- */}
                         <div className="flex flex-col mb-6">
                           <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Upcoming Schedule</span>
 
                           {(() => {
                             if (isOutOfOrder) return <p className="text-xs font-medium text-slate-400 italic">Schedule unavailable</p>;
+                            
+                            // NEW CHECK: Protect VIP Schedules
+                            if (isVipVenue) return (
+                              <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-3 flex items-center gap-2">
+                                <Crown size={14} className="text-purple-400"/>
+                                <span className="text-xs font-bold text-purple-600/70">Schedule Restricted</span>
+                              </div>
+                            );
 
                             const upcoming = getUpcomingBookings(venue.id);
                             if (upcoming.length === 0) {
@@ -648,7 +654,7 @@ export default function LandingPage() {
                           </div>
                         </div>
 
-                        {/* NEW: Lock button for VIP Venues if user is not an Admin/Leadership */}
+                        {/* Lock button for VIP Venues if user is not an Admin/Leadership */}
                         {isOutOfOrder ? (
                           <button disabled className="w-full py-5 text-sm font-black bg-slate-200 text-slate-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed">
                             Venue Unavailable
