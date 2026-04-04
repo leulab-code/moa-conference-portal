@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useApp, API_BASE } from '@/lib/app-context';
 import { 
   Building2, Users, Tag, ChevronRight, MapPin, Sparkles, 
-  Plus, Edit2, Trash2, X, Save, Info, DollarSign, Image as ImageIcon, Upload, AlertTriangle, MonitorSmartphone, CheckCircle2, Eye
+  Plus, Edit2, Trash2, X, Save, Info, DollarSign, Image as ImageIcon, Upload, AlertTriangle, MonitorSmartphone, CheckCircle2, Eye, Crown
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
@@ -116,6 +116,13 @@ export default function VenuesPage() {
   const { venues, bookings, role, token, refreshData, technicalServices = [], supportServices = [] } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // --- VIP ROOM SECURITY FILTER ---
+  // Only allow admins/leadership to see rooms with "VIP" in the name
+  const isPrivilegedUser = ['leadership', 'system_admin', 'event_management'].includes(role || '');
+  const availableVenues = venues?.filter(v => 
+    isPrivilegedUser ? true : !(v.name || '').toLowerCase().includes('vip')
+  ) || [];
+
   // Management State
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -143,7 +150,6 @@ export default function VenuesPage() {
     setImageFile(null);
     setImagePreview(v.image || null);
     
-    // Parse the included services safely
     let parsedServices = [];
     try {
       parsedServices = Array.isArray(v.included_services) ? v.included_services : JSON.parse(v.included_services || '[]');
@@ -157,7 +163,6 @@ export default function VenuesPage() {
       price: v.price?.toString() || '',
       included_services: parsedServices.map(String)
     });
-    // NOTE: Removed window.scrollTo because the form is now a fixed modal!
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,7 +188,7 @@ export default function VenuesPage() {
     }));
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isEdit = !!editingId;
     const url = isEdit ? `${API_BASE}/venues/${editingId}/` : `${API_BASE}/venues/`;
@@ -196,13 +201,8 @@ const handleSubmit = async (e: React.FormEvent) => {
       payload.append('best_for', formData.best_for);
       if (formData.capacity) payload.append('capacity', formData.capacity);
       if (formData.price) payload.append('price', formData.price);
-      
-      // Pass included services as a JSON string
       payload.append('included_services', JSON.stringify(formData.included_services));
-
-      if (imageFile) {
-        payload.append('image', imageFile);
-      }
+      if (imageFile) payload.append('image', imageFile);
 
       const res = await fetch(url, {
         method,
@@ -213,10 +213,8 @@ const handleSubmit = async (e: React.FormEvent) => {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         console.error("Backend Error:", errData);
-        
         const firstError = Object.values(errData)[0];
         const errorMessage = Array.isArray(firstError) ? firstError[0] : (errData.detail || 'Failed to save venue.');
-        
         throw new Error(String(errorMessage));
       }
       
@@ -294,11 +292,11 @@ const handleSubmit = async (e: React.FormEvent) => {
         </div>
       </div>
 
-      {/* NEW: Admin Form as a Fixed Modal Overlay */}
+      {/* Admin Form as a Fixed Modal Overlay */}
       {(isAdding || editingId) && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-8 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-y-auto">
            <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-in zoom-in-95 duration-500 my-auto">
-              
+             
               {/* Modal Header */}
               <div className="flex items-center justify-between p-6 md:p-8 border-b border-slate-100 shrink-0 bg-slate-50/50">
                  <div className="flex items-center gap-4">
@@ -418,8 +416,10 @@ const handleSubmit = async (e: React.FormEvent) => {
 
       {/* Grid */}
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-        {venues.map((venue, i) => {
+        {/* --- FIXED: Now maps over availableVenues instead of venues --- */}
+        {availableVenues?.map((venue, i) => {
           const isOutOfOrder = venue.status === 'out_of_order';
+          const isVipVenue = (venue.name || '').toLowerCase().includes('vip');
 
           // Splitting the purpose text
           const purposes = (venue.bestFor || venue.best_for || 'General Facility').split(',').map((p: string) => p.trim()).filter(Boolean);
@@ -446,6 +446,11 @@ const handleSubmit = async (e: React.FormEvent) => {
                    <span className={`text-[9px] uppercase tracking-widest px-3 py-1.5 rounded-xl font-black border backdrop-blur-md shadow-lg ${typeBadgeStyles[venue.type] || 'bg-white/90 text-slate-700'}`}>
                      {venue.type}
                    </span>
+                   {isVipVenue && (
+                     <span className="text-[9px] uppercase tracking-widest px-3 py-1.5 rounded-xl font-black bg-purple-600 text-white shadow-lg flex items-center gap-1 border border-purple-400">
+                       <Crown size={10} /> VIP EXCLUSIVE
+                     </span>
+                   )}
                 </div>
 
                 {/* Pricing Overlay */}
@@ -544,7 +549,8 @@ const handleSubmit = async (e: React.FormEvent) => {
         })}
       </div>
       
-      {venues.length === 0 && (
+      {/* --- FIXED: Now uses availableVenues.length --- */}
+      {(!availableVenues || availableVenues.length === 0) && (
         <div className="text-center py-32 bg-white rounded-[3rem] border border-slate-100 shadow-inner">
            <Building2 className="w-20 h-20 text-slate-100 mx-auto mb-8" />
            <p className="text-2xl font-serif font-black text-slate-300 italic">"The catalog is currently empty."</p>

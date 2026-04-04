@@ -4,7 +4,7 @@ import { DailySchedule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { format, parseISO, eachDayOfInterval, startOfDay } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock, AlignLeft, Ticket, Phone } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock } from 'lucide-react';
 import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 
@@ -62,6 +62,13 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // --- VIP ROOM SECURITY FILTER ---
+  // Only allow admins/leadership to see rooms with "VIP" in the name
+  const isPrivilegedUser = ['leadership', 'system_admin', 'event_management'].includes(user?.role || '');
+  const availableVenues = venues?.filter(v => 
+    isPrivilegedUser ? true : !(v.name || '').toLowerCase().includes('vip')
+  );
 
   const getEthDateString = (gregStr: string) => {
     if (!gregStr) return '';
@@ -201,7 +208,6 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
         errs.startDate = 'Required';
       }
       
-      // STRICT PAX VALIDATION
       if (!form.participantCount || isNaN(parseInt(form.participantCount)) || parseInt(form.participantCount) <= 0) {
         errs.participantCount = 'Required';
       } else if (selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity) {
@@ -391,7 +397,8 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                   <label className="text-xs font-medium text-black uppercase block mb-2 tracking-widest flex items-center gap-2"><Building2 size={14}/> Venue Selection *</label>
                 <select value={form.venueId} onChange={e => setForm(p => ({ ...p, venueId: e.target.value }))} className={inputClass('venueId')}>
                   <option value="">Select a hall...</option>
-                  {venues?.map(v => (
+                  {/* --- FIXED: Uses availableVenues to hide VIP rooms --- */}
+                  {availableVenues?.map(v => (
                     <option 
                       key={v.id} 
                       value={v.id} 
@@ -417,14 +424,13 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                   <EthiopianCalendar 
                     selected={{ from: form.startDate ? parseISO(form.startDate) : undefined, to: form.endDate ? parseISO(form.endDate) : undefined }} 
                     onSelect={(r) => {
-                      // CORE FIX: Prevent selecting dates in the past
                       if (r?.from) {
                         const today = startOfDay(new Date());
                         const selectedDate = startOfDay(r.from);
                         
                         if (selectedDate < today) {
                           toast.error("You cannot book a date in the past.");
-                          return; // Stop the selection
+                          return; 
                         }
                       }
                       setForm(p => ({ ...p, startDate: r?.from ? format(r.from, 'yyyy-MM-dd') : '', endDate: r?.to ? format(r.to, 'yyyy-MM-dd') : '' }))
