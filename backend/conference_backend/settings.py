@@ -6,9 +6,10 @@ from decouple import config, Csv
 import os
 import ssl
 import certifi
-import dj_database_url  # You need to: pip install dj-database-url
+import dj_database_url
 
-# --- SSL FIXES (Kept from your version) ---
+# --- SSL FIXES ---
+# Essential for Python environments that have trouble finding root certificates
 os.environ['SSL_CERT_FILE'] = certifi.where()
 
 try:
@@ -29,12 +30,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-# Add your Vercel URL here too just in case
 ALLOWED_HOSTS = [
     'moa-conference-portal.onrender.com', 
-    '.vercel.app', 
     'localhost', 
-    '127.0.0.1'
+    '127.0.0.1',
+    '.vercel.app' 
 ]
 
 INSTALLED_APPS = [
@@ -43,7 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'whitenoise.runserver_nostatic', # ADD THIS for static files on Render
+    'whitenoise.runserver_nostatic', 
     'django.contrib.staticfiles',
     # Third-party
     'rest_framework',
@@ -56,7 +56,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', # ADD THIS (must be after SecurityMiddleware)
+    'whitenoise.middleware.WhiteNoiseMiddleware', 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware', 
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -85,9 +85,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'conference_backend.wsgi.application'
 
-# --- DATABASE CONFIGURATION (Optimized for Render) ---
-# This will use your DB_URL environment variable on Render, 
-# or fall back to your local settings.
+# --- DATABASE CONFIGURATION ---
 if config('DATABASE_URL', default=None):
     DATABASES = {
         'default': dj_database_url.config(
@@ -99,12 +97,8 @@ if config('DATABASE_URL', default=None):
 else:
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME'),
-            'USER': config('DB_USER'),
-            'PASSWORD': config('DB_PASSWORD'),
-            'HOST': config('DB_HOST', default='localhost'),
-            'PORT': config('DB_PORT', default='5432'),
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 
@@ -120,10 +114,9 @@ TIME_ZONE = 'Africa/Addis_Ababa'
 USE_I18N = True
 USE_TZ = True
 
-# --- STATIC FILES (WhiteNoise configuration) ---
+# --- STATIC & MEDIA FILES ---
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-# Use WhiteNoise to compress and cache static files forever
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
@@ -148,19 +141,25 @@ REST_FRAMEWORK = {
 CORS_ALLOW_ALL_ORIGINS = True 
 CORS_ALLOW_CREDENTIALS = True
 
-# CRITICAL: This allows your Vercel frontend to perform POST/PATCH/DELETE actions
+# Allows Vercel and Render to perform POST/PATCH actions without CSRF blocking
 CSRF_TRUSTED_ORIGINS = [
     "https://moa-conference-portal.onrender.com",
-    "https://*.vercel.app" # Allows all Vercel deployments
+    "https://moa-conference-portal.vercel.app",
+    "https://*.vercel.app"
 ]
 
-# --- EMAIL CONFIGURATION ---
+# --- EMAIL CONFIGURATION (FIXED FOR RENDER/CLOUD) ---
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool) 
-EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool) 
+EMAIL_HOST = 'smtp.gmail.com'
+
+# Port 465 is the standard for SSL in cloud environments like Render
+EMAIL_PORT = 465 
+EMAIL_USE_TLS = False  # Set to False when using Port 465
+EMAIL_USE_SSL = True   # Set to True when using Port 465
+
 EMAIL_HOST_USER = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=f"MoA Conference Center <{EMAIL_HOST_USER}>")
+
+# Prevents the application from timing out if Gmail is slow to respond
 EMAIL_TIMEOUT = 10
