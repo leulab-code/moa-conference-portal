@@ -24,10 +24,10 @@ const getEthDateString = (gregStr: string) => {
 
 // 1. What Admins See (Detailed)
 const adminStatusConfig = {
-  reserved: { label: 'Pending Review', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', borderLeft: 'border-l-amber-500', icon: <Clock3 size={12} className="shrink-0 text-amber-600" /> },
-  approved: { label: 'Awaiting Payment', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', borderLeft: 'border-l-blue-500', icon: <Clock size={12} className="shrink-0 text-blue-600" /> },
-  confirmed: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', borderLeft: 'border-l-[#268053]', icon: <CheckCircle2 size={12} className="shrink-0 text-emerald-600" /> },
-  override: { label: 'VIP Override', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', borderLeft: 'border-l-purple-500', icon: <Star size={12} className="shrink-0 text-purple-600" /> },
+  pending: { label: 'Pending Action', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', borderLeft: 'border-l-amber-500', icon: <Clock3 size={12} className="shrink-0 text-amber-600" /> },
+  partial_paid: { label: '1st Round Paid', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', borderLeft: 'border-l-blue-500', icon: <Clock size={12} className="shrink-0 text-blue-600" /> },
+  paid: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', borderLeft: 'border-l-[#268053]', icon: <CheckCircle2 size={12} className="shrink-0 text-emerald-600" /> },
+  approved: { label: 'VIP Override', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', borderLeft: 'border-l-purple-500', icon: <Star size={12} className="shrink-0 text-purple-600" /> },
   completed: { label: 'Completed', color: 'text-slate-800', bg: 'bg-slate-200', border: 'border-slate-400', borderLeft: 'border-l-slate-600', icon: <CheckCircle2 size={12} className="shrink-0 text-slate-600" /> },
   rejected: { label: 'Rejected', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', borderLeft: 'border-l-red-500', icon: <XCircle size={12} className="shrink-0 text-red-600" /> },
   cancelled: { label: 'Cancelled', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', borderLeft: 'border-l-slate-400', icon: <AlertCircle size={12} className="shrink-0 text-slate-500" /> }
@@ -35,7 +35,7 @@ const adminStatusConfig = {
 
 // 2. What Public Users See (Simplified)
 const userStatusConfig = {
-  tentative: { label: 'Tentative', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', borderLeft: 'border-l-amber-500', icon: <Clock size={12} className="shrink-0 text-amber-600" /> },
+  tentative: { label: 'Tentative / Pending', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', borderLeft: 'border-l-amber-500', icon: <Clock size={12} className="shrink-0 text-amber-600" /> },
   confirmed: { label: 'Confirmed', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', borderLeft: 'border-l-[#268053]', icon: <CheckCircle2 size={12} className="shrink-0 text-emerald-600" /> },
   cancelled: { label: 'Cancelled', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', borderLeft: 'border-l-slate-400', icon: <AlertCircle size={12} className="shrink-0 text-slate-500" /> }
 };
@@ -43,11 +43,11 @@ const userStatusConfig = {
 const getStatusProps = (status: string, isAdmin: boolean) => {
   const s = status?.toLowerCase() || '';
   if (isAdmin) {
-    return adminStatusConfig[s as keyof typeof adminStatusConfig] || adminStatusConfig.reserved;
+    return adminStatusConfig[s as keyof typeof adminStatusConfig] || adminStatusConfig.pending;
   } else {
     // Compress logic for public users
-    if (['confirmed', 'override', 'completed'].includes(s)) return userStatusConfig.confirmed;
-    if (['reserved', 'approved'].includes(s)) return userStatusConfig.tentative;
+    if (['paid', 'approved', 'completed'].includes(s)) return userStatusConfig.confirmed;
+    if (['pending', 'partial_paid'].includes(s)) return userStatusConfig.tentative;
     return userStatusConfig.cancelled;
   }
 };
@@ -269,7 +269,7 @@ export default function CalendarView() {
           {isAdmin ? (
             <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-wider bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
               <span className="flex items-center gap-1.5 text-amber-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-amber-500" /> Pending</span>
-              <span className="flex items-center gap-1.5 text-blue-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-blue-500" /> Wait Pay</span>
+              <span className="flex items-center gap-1.5 text-blue-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-blue-500" /> 1st Round</span>
               <span className="flex items-center gap-1.5 text-emerald-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-[#268053]" /> Paid</span>
               <span className="flex items-center gap-1.5 text-purple-700 whitespace-nowrap"><span className="w-2.5 h-2.5 rounded bg-purple-500" /> VIP</span>
             </div>
@@ -337,7 +337,7 @@ export default function CalendarView() {
                 let matchesDate = b.startDate <= dateStr && b.endDate >= dateStr;
                 if (b.dailySchedules?.length) matchesDate = b.dailySchedules.some(s => s.date === dateStr);
                 const matchVenue = selectedVenue === 'all' || b.venueId.toString() === selectedVenue;
-                const validStatus = ['reserved', 'approved', 'confirmed', 'override', 'completed'].includes(b.status);
+                const validStatus = ['pending', 'partial_paid', 'paid', 'approved', 'completed'].includes(b.status);
                 return matchesDate && matchVenue && validStatus;
              });
 
@@ -350,8 +350,8 @@ export default function CalendarView() {
                  <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
                    {dayBookings.map(b => {
                       // Fetch the correct styles dynamically based on Role
-                      const cfg = getStatusProps(b.status, isAdmin);
-
+                      let cfg = getStatusProps(b.status, isAdmin);
+                      
                       return (
                         <div 
                           key={b.id} 
