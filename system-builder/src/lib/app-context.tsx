@@ -346,33 +346,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshData, getHeaders]);
 
- const updateBookingStatus = async (id: string, status: string, reason?: string) => {
-  try {
-    const res = await fetch(`${API_BASE}/bookings/${id}/update_status/`, {
-      method: 'PATCH', // Ensure this is PATCH
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Token ${token}`,
-      },
-      body: JSON.stringify({ 
-        status: status, // This must be the raw string: 'paid', 'approved', etc.
-        rejection_reason: reason 
-      }),
-    });
+const updateBookingStatus = useCallback(async (id: string, status: string, reason?: string) => {
+    try {
+      // 1. SAFE MAPPING: Ensure frontend labels match backend choices
+      let backendStatus = status.toLowerCase();
+      if (backendStatus === 'confirmed') backendStatus = 'paid';
+      if (backendStatus === 'override') backendStatus = 'approved';
+      if (backendStatus === 'reserved') backendStatus = 'pending';
 
-    if (!res.ok) {
-      // This will help us see the error in the console
-      const errorData = await res.json();
-      console.error("SERVER ERROR DETAIL:", errorData);
-      throw new Error(JSON.stringify(errorData));
+      const res = await fetch(`${API_BASE}/bookings/${id}/update_status/`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: backendStatus, rejection_reason: reason }),
+      });
+
+      const responseData = await res.json();
+
+      if (!res.ok) {
+        console.error("SERVER ERROR DETAIL:", responseData);
+        throw new Error(responseData.error || responseData.detail || JSON.stringify(responseData));
+      }
+
+      toast.success(`Booking set to ${backendStatus}`);
+      
+      // FIX: Using your app's actual data refresh function
+      refreshData(); 
+      
+    } catch (error: any) {
+      console.error("Update failed:", error);
+      toast.error(error.message || 'Update failed');
+      throw error;
     }
-
-    await fetchBookings(); // Refresh list after success
-  } catch (err) {
-    console.error("Update failed:", err);
-    throw err;
-  }
-};
+  }, [refreshData, getHeaders]);
 
   const cancelBooking = useCallback(async (id: string) => {
     try {
