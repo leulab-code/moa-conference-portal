@@ -3,8 +3,8 @@ import { useApp } from '@/lib/app-context';
 import { DailySchedule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { format, parseISO, eachDayOfInterval } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Eraser, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock } from 'lucide-react';
+import { format, parseISO, eachDayOfInterval, startOfDay } from 'date-fns';
+import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock } from 'lucide-react';
 import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 
@@ -27,12 +27,23 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   const [currentStep, setCurrentStep] = useState(1);
   const [submittedBookingId, setSubmittedBookingId] = useState<string | null>(null);
   
+  const initialVenueId = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      return params.get('venueId') || hashParams.get('venueId') || '';
+    } catch {
+      return '';
+    }
+  }, []);
+
   const [form, setForm] = useState({
-    venueId: '', eventTitle: '', eventDescription: '', 
+    venueId: initialVenueId,
+    eventTitle: '', eventDescription: '', 
     organizerName: user?.name || '', 
     organizerOrganization: '', 
     organizerEmail: user?.email || '', 
-    organizerPhone: '',
+    organizerPhone: user?.phone || '',
     startDate: '', endDate: '', participantCount: '', 
     technicalServices: [] as string[], supportServices: [] as string[],
     dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
@@ -43,12 +54,21 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
       setForm(prev => ({
         ...prev,
         organizerName: user.name,
-        organizerEmail: user.email || ''
+        organizerEmail: user.email || '',
+        organizerPhone: user.phone || ''
       }));
     }
   }, [user]);
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // --- VIP ROOM SECURITY FILTER ---
+  // Only allow admins/leadership to see rooms with "VIP" in the name
+  const isPrivilegedUser = ['leadership', 'system_admin', 'event_management'].includes(user?.role || '');
+  const availableVenues = venues?.filter(v => 
+    isPrivilegedUser ? true : !(v.name || '').toLowerCase().includes('vip')
+  );
 
   const getEthDateString = (gregStr: string) => {
     if (!gregStr) return '';
@@ -62,28 +82,23 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
   const selectedVenue = venues?.find(v => v.id?.toString() === form.venueId?.toString());
 
-  // --- NEW: Smart logic to check if a service is ALREADY included in the venue ---
   const isServiceIncluded = (type: 'technicalServices' | 'supportServices', serviceId: string) => {
-    if (!selectedVenue) return false;
-    
-    // Check both camelCase and snake_case just in case your backend uses either
-    const includedIds = type === 'technicalServices'
-      ? (selectedVenue.technicalServices || selectedVenue.technical_services || selectedVenue.includedServices || selectedVenue.included_services || [])
-      : (selectedVenue.supportServices || selectedVenue.support_services || selectedVenue.includedServices || selectedVenue.included_services || []);
-      
+    if (!selectedVenue || type === 'supportServices') return false;
+    const includedIds = (selectedVenue.technicalServices || selectedVenue.technical_services || selectedVenue.includedServices || selectedVenue.included_services || []);
     return includedIds.map(String).includes(String(serviceId));
   };
 
   const existingSchedules = useMemo(() => {
     if (!form.venueId) return [];
+    
     const vBookings = bookings?.filter(b => 
       b.venueId?.toString() === form.venueId?.toString() && 
-      ['reserved', 'approved', 'confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '')
+      ['pending', 'partial_paid', 'paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '')
     );
     
     const schedules: { date: string, start: string, end: string, isHard: boolean }[] = [];
     vBookings?.forEach(b => {
-      const isHard = ['confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '');
+      const isHard = ['paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '');
       
       if (b.dailySchedules && b.dailySchedules.length > 0) {
         b.dailySchedules.forEach((ds: any) => schedules.push({ date: ds.date, start: ds.startTime, end: ds.endTime, isHard }));
@@ -185,12 +200,20 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     if (step === 1) {
       if (!form.organizerName?.trim()) errs.organizerName = 'Required';
       if (!form.eventTitle?.trim()) errs.eventTitle = 'Required';
+      if (!form.organizerPhone?.trim() || form.organizerPhone.trim() === '+251') errs.organizerPhone = 'Required';
     } else if (step === 2) {
       if (!form.venueId) errs.venueId = 'Select a venue';
-      if (!form.startDate) errs.startDate = 'Required';
-      if (selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity) {
-        errs.participantCount = `Capacity exceeded (Max: ${selectedVenue.capacity})`;
+      
+      if (!form.startDate) {
+        errs.startDate = 'Required';
       }
+      
+      if (!form.participantCount || isNaN(parseInt(form.participantCount)) || parseInt(form.participantCount) <= 0) {
+        errs.participantCount = 'Required';
+      } else if (selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity) {
+        errs.participantCount = `Max: ${selectedVenue.capacity} allowed`;
+      }
+
       if (dailyConflicts.some(c => c.type === 'hard_overlap' || c.type === 'cleaning')) {
         errs.rangeConflict = 'Please resolve hard time conflicts below.';
       }
@@ -205,12 +228,14 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   });
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const finalTotal = venueTotal + serviceFee;
 
       const payload = {
         ...form, 
-        status: 'approved',
+        status: 'pending', // FORCE PENDING REVIEW
         name: form.organizerName,
         full_name: form.organizerName,
         organizer_name: form.organizerName,
@@ -228,7 +253,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
         total_price: finalTotal,
         venueId: form.venueId,
         venue: form.venueId,
-        eventTitle: form.eventTitle,
+        eventTitle: form.eventTitle, 
         event_title: form.eventTitle,
         eventDescription: form.eventDescription,
         event_description: form.eventDescription,
@@ -247,7 +272,9 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
       const data = await addBooking(payload);
       setSubmittedBookingId(data.id || 'SUCCESS');
     } catch { 
-      toast.error('Submit failed'); 
+      toast.error('Submit failed. Please try again.'); 
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -257,8 +284,6 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
   };
 
   const inputClass = (f: string) => `w-full text-sm border-2 rounded-xl px-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white transition-all focus:ring-4 focus:ring-[#268053]/10 outline-none ${errors[f] ? 'border-red-300 focus:border-red-400 bg-red-50/20' : 'border-slate-100 focus:border-[#268053]'}`;
-
-  const isPaxExceeded = selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity;
 
   if (submittedBookingId) {
     const isGuest = !token;
@@ -270,8 +295,8 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
            <CheckCircle2 className="w-24 h-24 text-emerald-500 mx-auto mb-6 animate-in zoom-in duration-500 drop-shadow-sm" />
            <h2 className="text-4xl font-black text-slate-800 mb-2 uppercase tracking-tight">Request Submitted!</h2>
            
-           <p className="text-slate-500 font-bold text-sm mb-8 leading-relaxed px-4">
-             Your slot is reserved under <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Awaiting Payment</span>.<br/> First to pay secures the venue!
+           <p className="text-slate-500 font-bold text-sm mb-6 leading-relaxed px-4">
+             Your slot is reserved under <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Admin Review</span>.<br/> You will be notified upon confirmation.
            </p>
 
            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-5 mb-10 shadow-inner">
@@ -319,16 +344,48 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
           {currentStep === 1 && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="grid gap-6 sm:grid-cols-2">
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Full Name *</label><input value={form.organizerName} onChange={e => setForm(p => ({ ...p, organizerName: e.target.value }))} className={inputClass('organizerName')} placeholder="e.g. Abebe Kebede" /></div>
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Organization *</label><input value={form.organizerOrganization} onChange={e => setForm(p => ({ ...p, organizerOrganization: e.target.value }))} className={inputClass('organizerOrganization')} placeholder="Ministry / Department" /></div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Full Name *</label>
+                  <input value={form.organizerName} onChange={e => setForm(p => ({ ...p, organizerName: e.target.value }))} className={inputClass('organizerName')} placeholder="e.g. Abebe Kebede" />
+                  {errors.organizerName && <p className="text-xs text-red-500 mt-1 font-bold">{errors.organizerName}</p>}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Organization *</label>
+                  <input value={form.organizerOrganization} onChange={e => setForm(p => ({ ...p, organizerOrganization: e.target.value }))} className={inputClass('organizerOrganization')} placeholder="Organization Name" />
+                </div>
               </div>
               <div className="grid gap-6 sm:grid-cols-2">
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Official Email *</label><input type="email" value={form.organizerEmail} onChange={e => setForm(p => ({ ...p, organizerEmail: e.target.value }))} className={inputClass('organizerEmail')} placeholder="name@domain.gov.et" /></div>
-                <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Phone Number *</label><input value={form.organizerPhone} onChange={e => setForm(p => ({ ...p, organizerPhone: e.target.value }))} className={inputClass('organizerPhone')} placeholder="+251 911..." /></div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Official Email *</label>
+                  <input type="email" value={form.organizerEmail} onChange={e => setForm(p => ({ ...p, organizerEmail: e.target.value }))} className={inputClass('organizerEmail')} placeholder="name@domain.com" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Phone Number *</label>
+                  <div className="flex">
+                    <div className="flex items-center justify-center px-4 bg-slate-100 border-2 border-r-0 border-slate-100 rounded-l-xl text-slate-700 font-bold text-sm">
+                      🇪🇹 +251
+                    </div>
+                    <input 
+                      value={form.organizerPhone.startsWith('+251') ? form.organizerPhone.substring(4).trim() : form.organizerPhone} 
+                      onChange={e => setForm(p => ({ ...p, organizerPhone: '+251 ' + e.target.value.replace(/^\+251\s*/, '') }))} 
+                      className={inputClass('organizerPhone').replace('rounded-xl', 'rounded-r-xl rounded-l-none')} 
+                      placeholder="911 23 45 67" 
+                    />
+                  </div>
+                  {errors.organizerPhone && <p className="text-xs text-red-500 mt-1 font-bold">{errors.organizerPhone}</p>}
+                </div>
               </div>
               <hr className="border-slate-100" />
-              <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Event Title *</label><input value={form.eventTitle} onChange={e => setForm(p => ({ ...p, eventTitle: e.target.value }))} className={inputClass('eventTitle')} placeholder="Annual Review Meeting 2026" /></div>
-              <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block tracking-widest">Description</label><textarea rows={3} value={form.eventDescription} onChange={e => setForm(p => ({ ...p, eventDescription: e.target.value }))} className={inputClass('eventDescription')} placeholder="Briefly describe the purpose of this booking..." /></div>
+              <div>
+                <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Event Title *</label>
+                <input value={form.eventTitle} onChange={e => setForm(p => ({ ...p, eventTitle: e.target.value }))} className={inputClass('eventTitle')} placeholder="Annual Review Meeting 2026" />
+                {errors.eventTitle && <p className="text-xs text-red-500 mt-1 font-bold">{errors.eventTitle}</p>}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Description</label>
+                <textarea rows={3} value={form.eventDescription} onChange={e => setForm(p => ({ ...p, eventDescription: e.target.value }))} className={inputClass('eventDescription')} placeholder="Briefly describe the purpose of this booking..." />
+              </div>
+
               <Button onClick={() => validateStep(1) && setCurrentStep(2)} className="w-full h-14 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white rounded-xl font-black tracking-widest uppercase shadow-xl shadow-emerald-900/20 transition-all hover:-translate-y-1">CONTINUE TO VENUE</Button>
             </div>
           )}
@@ -337,10 +394,11 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
             <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
               <div className="grid sm:grid-cols-2 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase block mb-2 tracking-widest flex items-center gap-2"><Building2 size={14}/> Venue Selection *</label>
+                  <label className="text-xs font-medium text-black uppercase block mb-2 tracking-widest flex items-center gap-2"><Building2 size={14}/> Venue Selection *</label>
                 <select value={form.venueId} onChange={e => setForm(p => ({ ...p, venueId: e.target.value }))} className={inputClass('venueId')}>
                   <option value="">Select a hall...</option>
-                  {venues?.map(v => (
+                  {/* --- FIXED: Uses availableVenues to hide VIP rooms --- */}
+                  {availableVenues?.map(v => (
                     <option 
                       key={v.id} 
                       value={v.id} 
@@ -353,11 +411,11 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 </select>
                 </div>
                 <div>
-                  <label className={`text-xs font-black uppercase block mb-2 tracking-widest flex items-center gap-2 transition-colors ${isPaxExceeded ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}>
-                    <Users size={14}/> 
-                    Expected Pax * {isPaxExceeded && <span className="text-[9px] bg-red-100 px-2 py-0.5 rounded text-red-700 ml-auto">Exceeds {selectedVenue?.capacity} limit!</span>}
+                  <label className={`text-xs font-medium uppercase block mb-2 tracking-widest flex items-center gap-2 transition-colors ${errors.participantCount ? 'text-red-600 animate-pulse' : 'text-black'}`}>
+                    <Users size={14}/> Expected Pax *
+                    {errors.participantCount && <span className="text-[9px] bg-red-100 px-2 py-0.5 rounded text-red-700 ml-auto font-bold">{errors.participantCount}</span>}
                   </label>
-                  <input type="number" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={`${inputClass('participantCount')} ${isPaxExceeded ? 'border-red-400 bg-red-50 text-red-900 ring-4 ring-red-500/20' : ''}`} placeholder="Number of attendees" />
+                  <input type="number" min="1" value={form.participantCount} onChange={e => setForm(p => ({ ...p, participantCount: e.target.value }))} className={`${inputClass('participantCount')} ${errors.participantCount ? 'border-red-400 bg-red-50 text-red-900 ring-4 ring-red-500/20' : ''}`} placeholder="Number of attendees" />
                 </div>
               </div>
 
@@ -365,14 +423,38 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 <div className="bg-slate-50/80 p-4 rounded-2xl flex justify-center border border-slate-100">
                   <EthiopianCalendar 
                     selected={{ from: form.startDate ? parseISO(form.startDate) : undefined, to: form.endDate ? parseISO(form.endDate) : undefined }} 
-                    onSelect={(r) => setForm(p => ({ ...p, startDate: r?.from ? format(r.from, 'yyyy-MM-dd') : '', endDate: r?.to ? format(r.to, 'yyyy-MM-dd') : '' }))} 
+                    onSelect={(r) => {
+                      if (r?.from) {
+                        const today = startOfDay(new Date());
+                        const selectedDate = startOfDay(r.from);
+                        
+                        if (selectedDate < today) {
+                          toast.error("You cannot book a date in the past.");
+                          return; 
+                        }
+                      }
+                      setForm(p => ({ ...p, startDate: r?.from ? format(r.from, 'yyyy-MM-dd') : '', endDate: r?.to ? format(r.to, 'yyyy-MM-dd') : '' }))
+                    }} 
                     bookedDates={hardBookedDates}
                     pendingDates={softBookedDates}
                   />
                 </div>
                 <div className="flex-1 space-y-4 flex flex-col justify-center">
-                  <div className="p-4 border-2 border-slate-100 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm"><span className="text-slate-300">START</span> <span className="text-[#268053]">{form.startDate ? getEthDateString(form.startDate) : '---'}</span></div>
-                  <div className="p-4 border-2 border-slate-100 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm"><span className="text-slate-300">END</span> <span className="text-[#268053]">{form.endDate ? getEthDateString(form.endDate) : '---'}</span></div>
+                  <div className={`p-4 border-2 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm ${errors.startDate ? 'border-red-300 bg-red-50' : 'border-slate-100'}`}>
+                    <span className="text-slate-300">START</span> 
+                    <span className="text-[#268053]">
+                      {form.startDate ? getEthDateString(form.startDate) : '---'}
+                    </span>
+                  </div>
+                  <div className="p-4 border-2 border-slate-100 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm">
+                    <span className="text-slate-300">END</span> 
+                    <span className="text-[#268053]">
+                      {form.endDate ? getEthDateString(form.endDate) : '---'}
+                    </span>
+                  </div>
+                  {errors.startDate && (
+                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest text-center">{errors.startDate}</p>
+                  )}
                   {errors.rangeConflict && (
                     <div className="bg-red-50 border-2 border-red-200 p-3 rounded-xl text-center shadow-inner animate-in pop-in">
                        <p className="text-xs text-red-700 font-black uppercase tracking-widest flex items-center justify-center gap-2"><ShieldAlert size={14}/> Please resolve time conflicts below</p>
@@ -383,7 +465,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
               {form.dailySchedules?.length > 0 && (
                 <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Time Adjustments per Day</p>
+                  <p className="text-xs font-medium text-black uppercase tracking-widest mb-2">Time Adjustments per Day</p>
                   {form.dailySchedules.map((s, idx) => {
                     const conflict = dailyConflicts.find(c => c.date === s.date);
                     return (
@@ -435,14 +517,13 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                   
                   return (
                     <div key={l} className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
-                      <p className="text-xs font-black text-slate-800 uppercase mb-4 tracking-widest flex items-center gap-2">
+                      <p className="text-xs font-medium text-black uppercase mb-4 tracking-widest flex items-center gap-2">
                         {i === 0 ? <MonitorSmartphone className="text-blue-500"/> : <Coffee className="text-amber-500"/>} 
                         {l} Support
                       </p>
                       <div className="grid gap-3">
                         {list && list.length > 0 ? (
                           list.map(s => {
-                            // --- NEW: Check if it's already included with the hall ---
                             const isIncluded = isServiceIncluded(type, s.id?.toString());
                             const isSelected = formList.includes(s.id?.toString());
                             
@@ -496,7 +577,7 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                   <Paperclip className="w-8 h-8 text-slate-400 group-hover:text-emerald-500 transition-colors" />
                 </div>
                 <p className="text-sm font-black text-slate-600 uppercase tracking-widest">{form.letterAttachment ? form.letterAttachment.name : 'Attach Official Request (PDF)'}</p>
-                <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Required for external organizers</p>
+                <p className="text-xs font-medium text-black mt-2 uppercase tracking-widest">Required for external organizers</p>
               </div>
               <div className="flex justify-between pt-6 border-t border-slate-100">
                 <button onClick={() => setCurrentStep(2)} className="font-black text-slate-400 hover:text-slate-600 uppercase text-xs tracking-widest transition-colors">Back</button>
@@ -560,7 +641,18 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
               
               <div className="mt-12 flex justify-between pt-6 border-t border-slate-100">
                 <button onClick={() => setCurrentStep(3)} className="font-black text-slate-400 hover:text-slate-600 uppercase text-xs tracking-widest transition-colors">Back</button>
-                <Button onClick={handleSubmit} className="px-16 h-16 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white text-lg rounded-2xl font-black shadow-2xl shadow-emerald-900/30 uppercase tracking-widest transition-all hover:-translate-y-1 hover:scale-105 active:scale-95">SUBMIT REQUEST</Button>
+                <Button 
+                  onClick={handleSubmit} 
+                  disabled={isSubmitting}
+                  className="px-16 h-16 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white text-lg rounded-2xl font-black shadow-2xl shadow-emerald-900/30 uppercase tracking-widest transition-all hover:-translate-y-1 hover:scale-105 active:scale-95 disabled:opacity-75 disabled:pointer-events-none disabled:hover:translate-y-0 disabled:hover:scale-100 disabled:from-[#268053] disabled:to-[#268053]"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-3">
+                      <div className="w-5 h-5 border-[3px] border-white/30 border-t-white rounded-full animate-spin" />
+                      SUBMITTING...
+                    </span>
+                  ) : 'SUBMIT REQUEST'}
+                </Button>
               </div>
             </div>
           )}

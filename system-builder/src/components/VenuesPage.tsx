@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useApp, API_BASE } from '@/lib/app-context';
 import { 
   Building2, Users, Tag, ChevronRight, MapPin, Sparkles, 
-  Plus, Edit2, Trash2, X, Save, Info, DollarSign, Image as ImageIcon, Upload, AlertTriangle, MonitorSmartphone, CheckCircle2, Eye
+  Plus, Edit2, Trash2, X, Save, Info, DollarSign, Image as ImageIcon, Upload, AlertTriangle, MonitorSmartphone, CheckCircle2, Eye, Crown
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
@@ -32,13 +32,16 @@ const getFallbackImage = (type: string) => {
 };
 
 // ==========================================
-// NEW: VENUE DETAILS MODAL
+// VENUE DETAILS MODAL
 // ==========================================
 function VenueDetailsModal({ venue, onClose, technicalServices, supportServices }: { venue: any, onClose: () => void, technicalServices: any[], supportServices: any[] }) {
   const includedIds = Array.isArray(venue.included_services) ? venue.included_services : [];
   
   const includedTech = technicalServices.filter(s => includedIds.includes(s.id.toString()));
   const includedSupport = supportServices.filter(s => includedIds.includes(s.id.toString()));
+
+  // Splitting the purposes by comma
+  const purposes = (venue.bestFor || venue.best_for || 'General purpose facility').split(',').map((p: string) => p.trim()).filter(Boolean);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
@@ -73,14 +76,21 @@ function VenueDetailsModal({ venue, onClose, technicalServices, supportServices 
            </div>
 
            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><Info size={14}/> Ideal Purpose</p>
-              <p className="text-sm font-medium text-slate-600 leading-relaxed bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                 {venue.bestFor || venue.best_for || 'General purpose facility.'}
-              </p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><Info size={14}/> Ideal Purpose & Capabilities</p>
+              <div className="grid gap-2">
+                {purposes.map((purpose: string, idx: number) => (
+                  <div key={idx} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <CheckCircle2 size={16} />
+                    </div>
+                    <span className="text-sm font-bold text-slate-700">{purpose}</span>
+                  </div>
+                ))}
+              </div>
            </div>
 
            <div>
-              <p className="text-[10px] font-black text-[#268053] uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><CheckCircle2 size={14}/> Included Free Capabilities</p>
+              <p className="text-[10px] font-black text-[#268053] uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><Sparkles size={14}/> Included Free Services</p>
               <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100">
                  {includedTech.length === 0 && includedSupport.length === 0 ? (
                     <p className="text-sm text-slate-500 italic font-medium">No pre-installed services. All services must be requested separately.</p>
@@ -106,6 +116,13 @@ export default function VenuesPage() {
   const { venues, bookings, role, token, refreshData, technicalServices = [], supportServices = [] } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // --- VIP ROOM SECURITY FILTER ---
+  // Only allow admins/leadership to see rooms with "VIP" in the name
+  const isPrivilegedUser = ['leadership', 'system_admin', 'event_management'].includes(role || '');
+  const availableVenues = venues?.filter(v => 
+    isPrivilegedUser ? true : !(v.name || '').toLowerCase().includes('vip')
+  ) || [];
+
   // Management State
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -115,7 +132,7 @@ export default function VenuesPage() {
   
   const [formData, setFormData] = useState({
     name: '', type: 'Meeting', capacity: '', best_for: '', price: '',
-    included_services: [] as string[] // NEW FIELD
+    included_services: [] as string[]
   });
 
   const canManage = ['system_admin', 'event_management'].includes(role);
@@ -133,7 +150,6 @@ export default function VenuesPage() {
     setImageFile(null);
     setImagePreview(v.image || null);
     
-    // Parse the included services safely
     let parsedServices = [];
     try {
       parsedServices = Array.isArray(v.included_services) ? v.included_services : JSON.parse(v.included_services || '[]');
@@ -147,14 +163,13 @@ export default function VenuesPage() {
       price: v.price?.toString() || '',
       included_services: parsedServices.map(String)
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image is too large. Max size is 5MB.');
+      if (file.size > 15 * 1024 * 1024) {
+        toast.error('Image is too large. Max size is 15MB.');
         return;
       }
       setImageFile(file);
@@ -173,7 +188,7 @@ export default function VenuesPage() {
     }));
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isEdit = !!editingId;
     const url = isEdit ? `${API_BASE}/venues/${editingId}/` : `${API_BASE}/venues/`;
@@ -186,13 +201,8 @@ const handleSubmit = async (e: React.FormEvent) => {
       payload.append('best_for', formData.best_for);
       if (formData.capacity) payload.append('capacity', formData.capacity);
       if (formData.price) payload.append('price', formData.price);
-      
-      // Pass included services as a JSON string
       payload.append('included_services', JSON.stringify(formData.included_services));
-
-      if (imageFile) {
-        payload.append('image', imageFile);
-      }
+      if (imageFile) payload.append('image', imageFile);
 
       const res = await fetch(url, {
         method,
@@ -201,14 +211,10 @@ const handleSubmit = async (e: React.FormEvent) => {
       });
 
       if (!res.ok) {
-        // SMARTER ERROR HANDLING: Read exactly what Django is complaining about
         const errData = await res.json().catch(() => ({}));
         console.error("Backend Error:", errData);
-        
-        // Try to show the first specific field error if available
         const firstError = Object.values(errData)[0];
         const errorMessage = Array.isArray(firstError) ? firstError[0] : (errData.detail || 'Failed to save venue.');
-        
         throw new Error(String(errorMessage));
       }
       
@@ -219,6 +225,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       toast.error(error.message || `Error saving venue`);
     }
   };
+
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Are you sure you want to delete ${name}?`)) return;
     try {
@@ -285,131 +292,137 @@ const handleSubmit = async (e: React.FormEvent) => {
         </div>
       </div>
 
-      {/* Admin Form Overlay */}
+      {/* Admin Form as a Fixed Modal Overlay */}
       {(isAdding || editingId) && (
-        <div className="mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
-           <div className="bg-white border-2 border-emerald-500/20 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden bg-gradient-to-br from-white to-emerald-50/20">
-              <div className="flex items-center justify-between mb-10">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-8 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-y-auto">
+           <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-in zoom-in-95 duration-500 my-auto">
+             
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 md:p-8 border-b border-slate-100 shrink-0 bg-slate-50/50">
                  <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
                        {editingId ? <Edit2 className="w-5 h-5" /> : <Plus className="w-6 h-6" />}
                     </div>
                     <h3 className="text-2xl font-black text-slate-900">{editingId ? 'Edit Venue Details' : 'Register New Facility'}</h3>
                  </div>
-                 <button onClick={resetForm} className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-all">
+                 <button onClick={resetForm} className="p-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 rounded-full transition-all shadow-sm">
                     <X className="w-5 h-5" />
                  </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="grid lg:grid-cols-4 gap-8 relative z-10 font-sans">
-                 
-                 {/* Image Upload Area */}
-                 <div className="lg:col-span-1 space-y-3">
-                    <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Cover Image</label>
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="group relative aspect-[4/3] rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-white hover:border-emerald-500 transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center text-center p-4"
-                    >
-                       {imagePreview ? (
-                         <>
-                           <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover" />
-                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Upload className="text-white w-8 h-8" />
-                           </div>
-                         </>
-                       ) : (
-                         <>
-                           <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                              <ImageIcon className="text-slate-400 group-hover:text-emerald-500 w-6 h-6" />
-                           </div>
-                           <p className="text-[10px] font-bold text-slate-400 group-hover:text-emerald-600 px-4">Click to upload facility photo</p>
-                         </>
-                       )}
-                       <input 
-                         ref={fileInputRef}
-                         type="file" 
-                         accept="image/*"
-                         onChange={handleImageChange}
-                         className="hidden" 
-                       />
-                    </div>
-                 </div>
+              {/* Modal Scrollable Body */}
+              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+                <form onSubmit={handleSubmit} className="grid lg:grid-cols-4 gap-8 relative z-10 font-sans">
+                   
+                   {/* Image Upload Area */}
+                   <div className="lg:col-span-1 space-y-3">
+                      <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Cover Image</label>
+                      <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="group relative aspect-[4/3] rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-white hover:border-emerald-500 transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center text-center p-4"
+                      >
+                         {imagePreview ? (
+                           <>
+                             <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover" />
+                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Upload className="text-white w-8 h-8" />
+                             </div>
+                           </>
+                         ) : (
+                           <>
+                             <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                <ImageIcon className="text-slate-400 group-hover:text-emerald-500 w-6 h-6" />
+                             </div>
+                             <p className="text-[10px] font-bold text-slate-400 group-hover:text-emerald-600 px-4">Click to upload facility photo</p>
+                           </>
+                         )}
+                         <input 
+                           ref={fileInputRef}
+                           type="file" 
+                           accept="image/*"
+                           onChange={handleImageChange}
+                           className="hidden" 
+                         />
+                      </div>
+                   </div>
 
-                 <div className="lg:col-span-3 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Venue Name</label>
-                        <input required type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500 outline-none transition-all" placeholder="e.g. Grand Auditorium" />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Category</label>
-                        <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500 outline-none transition-all cursor-pointer">
-                          {venueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Max Capacity</label>
-                        <div className="relative">
-                          <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <input type="number" value={formData.capacity} onChange={(e) => setFormData({ ...formData, capacity: e.target.value })} className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm" placeholder="500" />
-                        </div>
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                        <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Ideal Setting/Purpose</label>
-                        <div className="relative">
-                          <Info className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <input required type="text" value={formData.best_for} onChange={(e) => setFormData({ ...formData, best_for: e.target.value })} className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm" placeholder="Diplomacy summits and international workshops" />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Daily Rate (ETB)</label>
-                        <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm" placeholder="0.00" />
-                        </div>
-                    </div>
+                   <div className="lg:col-span-3 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Venue Name</label>
+                          <input required type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500 outline-none transition-all" placeholder="e.g. Grand Auditorium" />
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Category</label>
+                          <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500 outline-none transition-all cursor-pointer">
+                            {venueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Max Capacity</label>
+                          <div className="relative">
+                            <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input type="number" value={formData.capacity} onChange={(e) => setFormData({ ...formData, capacity: e.target.value })} className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm" placeholder="500" />
+                          </div>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                          <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Ideal Setting/Purpose</label>
+                          <div className="relative">
+                            <Info className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input required type="text" value={formData.best_for} onChange={(e) => setFormData({ ...formData, best_for: e.target.value })} className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm" placeholder="Separate with commas e.g. Large conferences, 24/7 available" />
+                          </div>
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Daily Rate (ETB)</label>
+                          <div className="relative">
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm" placeholder="0.00" />
+                          </div>
+                      </div>
 
-                    {/* NEW: Included Services Multi-Select */}
-                    <div className="space-y-3 md:col-span-2 lg:col-span-3 pt-6 border-t border-emerald-500/10">
-                        <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Included Technical Capabilities (Free)</label>
-                        <p className="text-xs text-slate-500 mb-2 ml-1">Select the services that are permanently installed in this venue so users aren't charged for them.</p>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 bg-white/50 p-4 rounded-2xl border border-slate-100">
-                           {technicalServices.map(s => {
-                             const isSelected = formData.included_services.includes(s.id.toString());
-                             return (
-                               <div 
-                                 key={s.id} 
-                                 onClick={() => toggleIncludedService(s.id.toString())}
-                                 className={`cursor-pointer p-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${isSelected ? 'bg-emerald-50 border-emerald-500 text-emerald-800' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                               >
-                                 <span className="truncate pr-2">{s.name}</span>
-                                 <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-100 border-slate-300'}`}>
-                                    {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                      {/* Included Services Multi-Select */}
+                      <div className="space-y-3 md:col-span-2 lg:col-span-3 pt-6 border-t border-slate-100">
+                          <label className="text-[10px] font-black text-[#5c8b74] uppercase tracking-widest ml-1">Included Technical Capabilities (Free)</label>
+                          <p className="text-xs text-slate-500 mb-2 ml-1">Select the services that are permanently installed in this venue so users aren't charged for them.</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                             {technicalServices.map(s => {
+                               const isSelected = formData.included_services.includes(s.id.toString());
+                               return (
+                                 <div 
+                                   key={s.id} 
+                                   onClick={() => toggleIncludedService(s.id.toString())}
+                                   className={`cursor-pointer p-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${isSelected ? 'bg-emerald-50 border-emerald-500 text-emerald-800' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                                 >
+                                   <span className="truncate pr-2">{s.name}</span>
+                                   <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-100 border-slate-300'}`}>
+                                      {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                   </div>
                                  </div>
-                               </div>
-                             );
-                           })}
-                        </div>
-                    </div>
+                               );
+                             })}
+                          </div>
+                      </div>
 
-                    <div className="md:col-span-2 lg:col-span-3 flex justify-end pt-4">
-                        <Button type="submit" className="bg-[#112a1f] hover:bg-emerald-700 text-white font-black px-12 py-7 rounded-2xl shadow-2xl flex items-center gap-3 text-lg transition-transform hover:-translate-y-1 active:scale-95">
-                          <Save className="w-5 h-5" /> {editingId ? 'Save Changes' : 'Confirm Registration'}
-                        </Button>
-                    </div>
-                 </div>
-              </form>
+                      <div className="md:col-span-2 lg:col-span-3 flex justify-end pt-4">
+                          <Button type="submit" className="bg-[#112a1f] hover:bg-emerald-700 text-white font-black px-12 py-7 rounded-2xl shadow-2xl flex items-center gap-3 text-lg transition-transform hover:-translate-y-1 active:scale-95">
+                            <Save className="w-5 h-5" /> {editingId ? 'Save Changes' : 'Confirm Registration'}
+                          </Button>
+                      </div>
+                   </div>
+                </form>
+              </div>
            </div>
         </div>
       )}
 
       {/* Grid */}
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-        {venues.map((venue, i) => {
-          const activeCount = bookings.filter(
-            b => b.venueId === venue.id && (b.status === 'reserved' || b.status === 'confirmed')
-          ).length;
-          
+        {/* --- FIXED: Now maps over availableVenues instead of venues --- */}
+        {availableVenues?.map((venue, i) => {
           const isOutOfOrder = venue.status === 'out_of_order';
+          const isVipVenue = (venue.name || '').toLowerCase().includes('vip');
+
+          // Splitting the purpose text
+          const purposes = (venue.bestFor || venue.best_for || 'General Facility').split(',').map((p: string) => p.trim()).filter(Boolean);
 
           return (
             <div
@@ -433,6 +446,11 @@ const handleSubmit = async (e: React.FormEvent) => {
                    <span className={`text-[9px] uppercase tracking-widest px-3 py-1.5 rounded-xl font-black border backdrop-blur-md shadow-lg ${typeBadgeStyles[venue.type] || 'bg-white/90 text-slate-700'}`}>
                      {venue.type}
                    </span>
+                   {isVipVenue && (
+                     <span className="text-[9px] uppercase tracking-widest px-3 py-1.5 rounded-xl font-black bg-purple-600 text-white shadow-lg flex items-center gap-1 border border-purple-400">
+                       <Crown size={10} /> VIP EXCLUSIVE
+                     </span>
+                   )}
                 </div>
 
                 {/* Pricing Overlay */}
@@ -474,10 +492,23 @@ const handleSubmit = async (e: React.FormEvent) => {
                 )}
 
                 <div className="mb-6 mt-4">
-                  <h3 className={`text-2xl font-serif font-black tracking-tight mb-2 truncate transition-colors uppercase ${isOutOfOrder ? 'text-slate-400 line-through' : 'text-slate-900 group-hover:text-emerald-700'}`}>{venue.name}</h3>
-                  <p className="text-sm text-slate-500 font-semibold leading-relaxed line-clamp-2">
-                    {venue.bestFor || venue.best_for}
-                  </p>
+                  <h3 className={`text-2xl font-serif font-black tracking-tight mb-4 truncate transition-colors uppercase ${isOutOfOrder ? 'text-slate-400 line-through' : 'text-slate-900 group-hover:text-emerald-700'}`}>{venue.name}</h3>
+                  
+                  {/* NEW: Formatted Purpose List */}
+                  <div className="flex flex-col gap-2">
+                    {purposes.slice(0, 2).map((purpose: string, idx: number) => (
+                      <p key={idx} className="text-xs text-slate-500 font-bold flex items-center gap-2 truncate">
+                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                        <span className="truncate">{purpose}</span>
+                      </p>
+                    ))}
+                    {purposes.length > 2 && (
+                      <p className="text-[10px] font-black text-slate-400 ml-6 mt-1 uppercase tracking-widest">
+                        + {purposes.length - 2} more capabilities
+                      </p>
+                    )}
+                  </div>
+
                 </div>
                 
                 <div className="mt-auto pt-6 border-t border-slate-100 flex items-center justify-between">
@@ -518,7 +549,8 @@ const handleSubmit = async (e: React.FormEvent) => {
         })}
       </div>
       
-      {venues.length === 0 && (
+      {/* --- FIXED: Now uses availableVenues.length --- */}
+      {(!availableVenues || availableVenues.length === 0) && (
         <div className="text-center py-32 bg-white rounded-[3rem] border border-slate-100 shadow-inner">
            <Building2 className="w-20 h-20 text-slate-100 mx-auto mb-8" />
            <p className="text-2xl font-serif font-black text-slate-300 italic">"The catalog is currently empty."</p>

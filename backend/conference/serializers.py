@@ -5,13 +5,19 @@ import json
 from django.contrib.auth.models import User
 from django.db import transaction
 from rest_framework import serializers
-from .models import Venue, TechnicalService, SupportService, Booking, SystemUser, UserRoleChoices, TaskAllocation, MaintenanceUpdate, EmailTemplate
+from .models import (
+    Venue, TechnicalService, SupportService, Booking, 
+    SystemUser, UserRoleChoices, TaskAllocation, 
+    MaintenanceUpdate, EmailTemplate, BookingStatus
+)
 
 class DailySchedulesField(serializers.JSONField):
     def to_internal_value(self, data):
         if isinstance(data, str):
-            try: data = json.loads(data)
-            except: raise serializers.ValidationError('Invalid JSON.')
+            try: 
+                data = json.loads(data)
+            except: 
+                raise serializers.ValidationError('Invalid JSON.')
         return super().to_internal_value(data)
 
 class RegisterSerializer(serializers.Serializer):
@@ -21,7 +27,8 @@ class RegisterSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=UserRoleChoices.choices, default='organizer')
 
     def validate_email(self, value):
-        if User.objects.filter(username=value).exists(): raise serializers.ValidationError('Email exists.')
+        if User.objects.filter(username=value).exists(): 
+            raise serializers.ValidationError('Email exists.')
         return value.lower().strip()
 
     @transaction.atomic
@@ -29,8 +36,13 @@ class RegisterSerializer(serializers.Serializer):
         email = validated_data['email']
         name = validated_data['name']
         password = validated_data['password']
-        django_user = User.objects.create_user(username=email, email=email, password=password, first_name=name.split(' ')[0])
-        return SystemUser.objects.create(user=django_user, name=name, email=email, role=validated_data.get('role', 'organizer'))
+        django_user = User.objects.create_user(
+            username=email, email=email, password=password, first_name=name.split(' ')[0]
+        )
+        return SystemUser.objects.create(
+            user=django_user, name=name, email=email, 
+            role=validated_data.get('role', 'organizer')
+        )
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -45,7 +57,8 @@ class SystemUserSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'email', 'role', 'created_at', 'password', 'has_login']
         read_only_fields = ['id', 'created_at', 'has_login']
 
-    def get_has_login(self, obj): return obj.user_id is not None
+    def get_has_login(self, obj): 
+        return obj.user_id is not None
 
     @transaction.atomic
     def create(self, validated_data):
@@ -64,12 +77,14 @@ class SystemUserSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
-        for attr, value in validated_data.items(): setattr(instance, attr, value)
+        for attr, value in validated_data.items(): 
+            setattr(instance, attr, value)
         instance.save()
         if instance.user:
             instance.user.username = validated_data.get('email', instance.user.username)
             instance.user.email = validated_data.get('email', instance.user.email)
-            if password: instance.user.set_password(password)
+            if password: 
+                instance.user.set_password(password)
             instance.user.save()
         return instance
 
@@ -79,16 +94,13 @@ class VenueSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def to_internal_value(self, data):
-    
         if hasattr(data, 'dict'):
             data_dict = data.dict()
         else:
             data_dict = data.copy() if hasattr(data, 'copy') else dict(data)
             
-         
         included = data_dict.get('included_services')
         
-     
         if isinstance(included, str) and included.strip():
             try:
                 data_dict['included_services'] = json.loads(included)
@@ -97,7 +109,6 @@ class VenueSerializer(serializers.ModelSerializer):
         elif not included:
             data_dict['included_services'] = []
             
-        
         return super().to_internal_value(data_dict)
 
     def to_representation(self, instance):
@@ -114,7 +125,10 @@ class VenueSerializer(serializers.ModelSerializer):
         if exceptions is not None:
             MaintenanceUpdate.objects.filter(venue=instance).delete()
             for date_str, times in exceptions.items():
-                MaintenanceUpdate.objects.create(venue=instance, date=date_str, start_time=times['start'], end_time=times['end'])
+                MaintenanceUpdate.objects.create(
+                    venue=instance, date=date_str, 
+                    start_time=times['start'], end_time=times['end']
+                )
         return instance
 
 class TechnicalServiceSerializer(serializers.ModelSerializer):
@@ -136,14 +150,18 @@ class BookingSerializer(serializers.ModelSerializer):
     assigned_tech = serializers.JSONField(required=False, write_only=True)
     technical_services = serializers.PrimaryKeyRelatedField(many=True, queryset=TechnicalService.objects.all(), required=False)
     support_services = serializers.PrimaryKeyRelatedField(many=True, queryset=SupportService.objects.all(), required=False)
+    unavailable_technical_services = serializers.PrimaryKeyRelatedField(many=True, queryset=TechnicalService.objects.all(), required=False)
+    unavailable_support_services = serializers.PrimaryKeyRelatedField(many=True, queryset=SupportService.objects.all(), required=False)
 
     class Meta:
         model = Booking
-        fields = '__all__' # <-- CHANGED TO __ALL__ SO IT CATCHES EVERYTHING!
+        fields = '__all__'
 
     def get_booked_by_name(self, obj):
-        try: return obj.user.system_profile.name if obj.user else None
-        except: return None
+        try: 
+            return obj.user.system_profile.name if obj.user else None
+        except: 
+            return None
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -153,19 +171,32 @@ class BookingSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         tech = validated_data.pop('technical_services', None)
         supp = validated_data.pop('support_services', None)
+        unavailable_tech = validated_data.pop('unavailable_technical_services', None)
+        unavailable_supp = validated_data.pop('unavailable_support_services', None)
         assigned_tech = validated_data.pop('assigned_tech', None)
-        for attr, value in validated_data.items(): setattr(instance, attr, value)
+        
+        for attr, value in validated_data.items(): 
+            setattr(instance, attr, value)
         instance.save()
+        
         if tech is not None: instance.technical_services.set(tech)
         if supp is not None: instance.support_services.set(supp)
+        if unavailable_tech is not None: instance.unavailable_technical_services.set(unavailable_tech)
+        if unavailable_supp is not None: instance.unavailable_support_services.set(unavailable_supp)
+        
         if assigned_tech is not None:
             TaskAllocation.objects.filter(booking=instance).delete()
             for date_str, staff_id in assigned_tech.items():
-                if staff_id: TaskAllocation.objects.create(booking=instance, date=date_str, staff_id=staff_id)
+                if staff_id: 
+                    TaskAllocation.objects.create(booking=instance, date=date_str, staff_id=staff_id)
         return instance
 
+# =======================================================
+# FIXED: Syncing Status choices with the Model
+# =======================================================
 class BookingStatusSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=['reserved', 'approved', 'confirmed', 'override', 'rejected', 'cancelled', 'completed'])
+    # Using BookingStatus.values ensures 'partial_paid' and 'pending' are allowed!
+    status = serializers.ChoiceField(choices=BookingStatus.choices)
     rejection_reason = serializers.CharField(required=False, allow_blank=True, default='')
 
 class TaskAllocationSerializer(serializers.ModelSerializer):
@@ -177,6 +208,7 @@ class MaintenanceUpdateSerializer(serializers.ModelSerializer):
     class Meta: 
         model = MaintenanceUpdate
         fields = '__all__'
+
 class EmailTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailTemplate

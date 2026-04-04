@@ -20,6 +20,8 @@ export interface Venue {
   capacity: number | null;
   bestFor: string;
   price: number | null;
+  status: 'vacant' | 'out_of_order';
+  included_services: string[];
   image?: string | null;
 }
 
@@ -52,6 +54,7 @@ export interface Booking {
   organizerName: string;
   organizerEmail: string;
   organizerPhone: string;
+  organizerOrganization: string;
   startDate: string;
   endDate: string;
   startTime: string;
@@ -61,12 +64,14 @@ export interface Booking {
   status: BookingStatus;
   technicalServices: string[];
   supportServices: string[];
-  letterAttachment?: string;
-  ictAcknowledged?: boolean;
-  cateringAcknowledged?: boolean;
-  createdAt: string;
-  rejectionReason?: string;
-  venueDailyRate?: number;
+  letterAttachment?: string | null;
+  ictAcknowledged: boolean;
+  unavailableTechnicalServices?: string[];
+  cateringAcknowledged: boolean;
+  unavailableSupportServices?: string[];
+  rejectionReason: string;
+  venueDailyRate: number;
   serviceFees?: number;
   totalPrice?: number;
+  createdAt: string;
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ArrowLeft, Ticket, Clock, MapPin, Users, Edit2, XCircle, Info, Phone, AlignLeft, Save, Calendar, Lock } from 'lucide-react';
+import { Search, ArrowLeft, Ticket, Clock, MapPin, Users, Edit2, XCircle, Info, Phone, AlignLeft, Save, Calendar, Lock, AlertTriangle, Crown } from 'lucide-react';
 import moaLogo from '@/assets/moa-logo.png';
 import { API_BASE, mapBooking } from '@/lib/app-context';
 import { Booking } from '@/lib/types';
@@ -16,7 +16,6 @@ export default function TrackBookingPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ eventTitle: '', eventDescription: '', organizerPhone: '', participantCount: '' });
 
-  // Helper to display the tracked dates in Ethiopian Calendar format
   const getEthDateString = (gregStr: string) => {
     if (!gregStr) return '';
     try {
@@ -29,7 +28,6 @@ export default function TrackBookingPage() {
     }
   };
 
-  // NEW: Helper to format military time (23:59) to standard time (11:59 PM)
   const formatTime = (timeStr: string) => {
     if (!timeStr) return '';
     const [h, m] = timeStr.split(':');
@@ -39,17 +37,20 @@ export default function TrackBookingPage() {
     return `${formattedHr}:${m} ${ampm}`;
   };
 
-  // FIX: Added 'approved' and 'override' so they get their beautiful colors
   const getStatusInfo = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'reserved': return { label: 'Pending Approval', color: 'bg-amber-100 text-amber-700 border-amber-200' };
-      case 'approved': return { label: 'Approved (Awaiting Payment)', color: 'bg-blue-100 text-blue-700 border-blue-200' };
-      case 'confirmed': return { label: 'Confirmed', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
-      case 'override': return { label: 'VIP Override', color: 'bg-purple-100 text-purple-700 border-purple-200' };
-      case 'rejected': return { label: 'Rejected', color: 'bg-rose-100 text-rose-700 border-rose-200' };
-      case 'cancelled': return { label: 'Cancelled', color: 'bg-slate-100 text-slate-700 border-slate-200' };
-      case 'completed': return { label: 'Completed', color: 'bg-slate-800 text-white border-slate-700' };
-      default: return { label: status, color: 'bg-slate-100 text-slate-700 border-slate-200' };
+    switch (status?.toLowerCase()) {
+      case 'paid':
+      case 'completed':
+        return { label: 'Confirmed (Paid)', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+      case 'partial_paid':
+        return { label: '1st Round Paid', color: 'bg-blue-100 text-blue-700 border-blue-200' };
+      case 'approved':
+        return { label: 'VIP Approved', color: 'bg-purple-100 text-purple-700 border-purple-200' };
+      case 'rejected':
+      case 'cancelled':
+        return { label: status.charAt(0).toUpperCase() + status.slice(1), color: 'bg-rose-100 text-rose-700 border-rose-200' };
+      default:
+        return { label: 'Pending / Tentative', color: 'bg-amber-100 text-amber-700 border-amber-200' };
     }
   };
 
@@ -78,24 +79,23 @@ export default function TrackBookingPage() {
     }
   };
 
-  // 24-Hour Visual Lock Check
-  const isWithin24Hours = (startDate: string, startTime?: string) => {
+  const isLockedForEditing = (startDate: string, startTime?: string) => {
     if (!startDate) return false;
     try {
-      const [y, m, d] = startDate.split('T')[0].split('-').map(Number);
-      const [hr, min] = (startTime || '08:00').split(':').map(Number);
-      const ethDate = new EthDateTime(y, m, d, hr, min, 0);
-      const eventGregorianDate = ethDate.toEuropeanDate();
+      const d = startDate.split('T')[0];
+      const t = startTime || '08:00:00';
+      const eventDate = new Date(`${d}T${t}`);
       const now = new Date();
-      const hoursDifference = (eventGregorianDate.getTime() - now.getTime()) / (1000 * 3600);
-      return hoursDifference > 0 && hoursDifference < 24;
-    } catch (e) {
-      return false;
+      const diffInHours = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      return diffInHours < 24; 
+    } catch { 
+      return false; 
     }
   };
 
   const normalizedStatus = booking?.status?.toLowerCase() || '';
-  const isLocked = booking ? isWithin24Hours(booking.startDate, booking.startTime) && ['confirmed', 'approved', 'reserved'].includes(normalizedStatus) : false;
+  const isLocked = booking ? isLockedForEditing(booking.startDate, booking.startTime) && ['paid', 'approved', 'pending', 'partial_paid'].includes(normalizedStatus) : false;
+  const isVipBooking = booking?.eventTitle?.includes('⭐ [VIP OVERRIDE]');
 
   const handleCancel = async () => {
     if (!booking) return;
@@ -180,11 +180,29 @@ export default function TrackBookingPage() {
         {booking && !isEditing && (
           <div className="bg-white rounded-[2.5rem] shadow-xl p-8 border border-slate-100 animate-in fade-in slide-in-from-bottom-4 relative overflow-hidden">
              
+             {/* VIP OVERRIDE NOTICE */}
+             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8 text-left flex gap-3 shadow-inner">
+               <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+               <div>
+                 <p className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-1">Important Policy Notice</p>
+                 <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
+                   As a state facility, high-level Ministerial and VIP events hold supreme priority. Your booking may be subject to overriding or cancellation (with full refund) even after payment is confirmed.
+                 </p>
+               </div>
+             </div>
+
              {/* Header */}
              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-slate-100 pb-8">
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reference ID</p>
-                  <h2 className="text-3xl font-black text-slate-800 tracking-tight">MOA-BKG-{booking.id}</h2>
+                  <h2 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                    MOA-BKG-{booking.id}
+                    {isVipBooking && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-800 border border-amber-200 shadow-sm">
+                        <Crown size={12} /> VIP
+                      </span>
+                    )}
+                  </h2>
                 </div>
                 <div className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest border flex items-center gap-2 ${getStatusInfo(normalizedStatus).color}`}>
                   <div className="w-2 h-2 rounded-full bg-current opacity-70" />
@@ -223,7 +241,6 @@ export default function TrackBookingPage() {
                         ? getEthDateString(booking.startDate)
                         : `${getEthDateString(booking.startDate).split(',')[0]} - ${getEthDateString(booking.endDate)}`}
                     </p>
-                    {/* FIX: Formatted AM/PM Time */}
                     <p className="text-sm font-medium text-slate-500 mt-1 flex items-center gap-1">
                       <Clock size={12} /> {formatTime(booking.startTime)} to {formatTime(booking.endTime)}
                     </p>
@@ -243,8 +260,8 @@ export default function TrackBookingPage() {
                 </div>
              )}
 
-             {/* FIX: EDIT AND CANCEL ACTIONS BAR */}
-             {['reserved', 'approved', 'confirmed'].includes(normalizedStatus) && (
+             {/* EDIT AND CANCEL ACTIONS BAR */}
+             {['paid', 'approved', 'pending', 'partial_paid'].includes(normalizedStatus) && (
                 <div className="flex flex-col sm:flex-row gap-4 pt-8 border-t border-slate-100 mt-4">
                    {isLocked ? (
                      <div className="w-full flex items-center justify-center gap-3 text-amber-700 bg-amber-50 p-4 rounded-xl border border-amber-200">
@@ -253,7 +270,7 @@ export default function TrackBookingPage() {
                      </div>
                    ) : (
                      <>
-                       {['reserved', 'approved'].includes(normalizedStatus) && (
+                       {['pending', 'partial_paid'].includes(normalizedStatus) && (
                          <button onClick={() => setIsEditing(true)} className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 py-4 rounded-2xl text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm">
                            <Edit2 size={16} /> Edit Details
                          </button>
@@ -267,7 +284,7 @@ export default function TrackBookingPage() {
              )}
              
              {/* Read-only notice */}
-             {!['reserved', 'approved', 'confirmed'].includes(normalizedStatus) && (
+             {!['paid', 'approved', 'pending', 'partial_paid'].includes(normalizedStatus) && (
                <div className="pt-6 border-t border-slate-100 text-center">
                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">This booking can no longer be edited or cancelled.</p>
                </div>

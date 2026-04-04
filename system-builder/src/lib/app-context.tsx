@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { Booking, UserRole, TechnicalService, SupportService, Venue, SystemUser } from './types';
 import { toast } from 'sonner';
 
-export const API_BASE = 'http://localhost:8000/api';
-const SERVER_URL = 'http://localhost:8000';
+export const API_BASE = 'https://moa-conference-portal.onrender.com/api';
+const SERVER_URL = 'https://moa-conference-portal.onrender.com';
 
 interface AppContextType {
   role: UserRole;
@@ -25,7 +25,9 @@ interface AppContextType {
   removeService: (type: 'technical' | 'support', id: string) => Promise<void>;
   updateServicePrice: (id: string, name: string, price: number, type: 'technical' | 'support') => Promise<void>;
   acknowledgeTechnicalTask: (id: string, acknowledged: boolean) => Promise<void>;
+  toggleTechnicalServiceAvailability: (bookingId: string, serviceId: string) => Promise<void>;
   acknowledgeCateringTask: (id: string, acknowledged: boolean) => Promise<void>;
+  toggleSupportServiceAvailability: (bookingId: string, serviceId: string) => Promise<void>;
   refreshData: () => void;
 }
 
@@ -57,7 +59,9 @@ export const mapBooking = (b: any): Booking => ({
   supportServices: (b.support_services || []).map((id: any) => id?.toString()),
   letterAttachment: b.letter_attachment ? (b.letter_attachment.startsWith('http') ? b.letter_attachment : `${SERVER_URL}${b.letter_attachment}`) : null,
   ictAcknowledged: b.ict_acknowledged || false,
+  unavailableTechnicalServices: (b.unavailable_technical_services || []).map((id: any) => id?.toString()),
   cateringAcknowledged: b.catering_acknowledged || false,
+  unavailableSupportServices: (b.unavailable_support_services || []).map((id: any) => id?.toString()),
   createdAt: b.created_at || new Date().toISOString(),
   rejectionReason: b.rejection_reason || '',
   venueDailyRate: Number(b.venue_daily_rate || 0),
@@ -342,19 +346,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshData, getHeaders]);
 
-  const updateBookingStatus = useCallback(async (id: string, status: Booking['status'], reason?: string) => {
+const updateBookingStatus = useCallback(async (id: string, status: string, reason?: string) => {
     try {
+      // 1. SAFE MAPPING: Ensure frontend labels match backend choices
+      let backendStatus = status.toLowerCase();
+      if (backendStatus === 'confirmed') backendStatus = 'paid';
+      if (backendStatus === 'override') backendStatus = 'approved';
+      if (backendStatus === 'reserved') backendStatus = 'pending';
+
       const res = await fetch(`${API_BASE}/bookings/${id}/update_status/`, {
         method: 'PATCH',
         headers: getHeaders(),
-        body: JSON.stringify({ status, rejection_reason: reason }),
+        body: JSON.stringify({ status: backendStatus, rejection_reason: reason }),
       });
-      if (res.ok) {
-        toast.success(`Booking ${status}`);
-        refreshData();
+
+      const responseData = await res.json();
+
+      if (!res.ok) {
+        console.error("SERVER ERROR DETAIL:", responseData);
+        throw new Error(responseData.error || responseData.detail || JSON.stringify(responseData));
       }
-    } catch (error) {
-      toast.error('Update failed');
+
+      toast.success(`Booking set to ${backendStatus}`);
+      
+      // FIX: Using your app's actual data refresh function
+      refreshData(); 
+      
+    } catch (error: any) {
+      console.error("Update failed:", error);
+      toast.error(error.message || 'Update failed');
+      throw error;
     }
   }, [refreshData, getHeaders]);
 
@@ -427,6 +448,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshData, getHeaders]);
 
+  const toggleTechnicalServiceAvailability = useCallback(async (bookingId: string, serviceId: string) => {
+    try {
+      const booking = bookings.find(b => b.id === bookingId);
+      if (!booking) return;
+
+      let newList = [...(booking.unavailableTechnicalServices || [])];
+      if (newList.includes(serviceId)) {
+        newList = newList.filter(id => id !== serviceId);
+      } else {
+        newList.push(serviceId);
+      }
+
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/set_unavailable_services/`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ unavailable_technical_services: newList }),
+      });
+      if (res.ok) {
+        toast.success('Service status updated');
+        refreshData();
+      }
+    } catch (error) {
+      toast.error('Failed to update service availability');
+    }
+  }, [bookings, getHeaders, refreshData]);
+
+  const toggleSupportServiceAvailability = useCallback(async (bookingId: string, serviceId: string) => {
+    try {
+      const booking = bookings.find(b => b.id === bookingId);
+      if (!booking) return;
+
+      let newList = [...(booking.unavailableSupportServices || [])];
+      if (newList.includes(serviceId)) {
+        newList = newList.filter(id => id !== serviceId);
+      } else {
+        newList.push(serviceId);
+      }
+
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/set_unavailable_support_services/`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ unavailable_support_services: newList }),
+      });
+      if (res.ok) {
+        toast.success('Service status updated');
+        refreshData();
+      }
+    } catch (error) {
+      toast.error('Failed to update service availability');
+    }
+  }, [bookings, getHeaders, refreshData]);
+
   const acknowledgeCateringTask = useCallback(async (id: string, acknowledged: boolean) => {
     try {
       const res = await fetch(`${API_BASE}/bookings/${id}/acknowledge_catering/`, {
@@ -447,7 +520,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{ 
       role, setRole, token, user, login, register, logout, bookings, venues, addBooking, updateBookingStatus, cancelBooking,
       technicalServices, supportServices, servicePrices,
-      addService, removeService, updateServicePrice, acknowledgeTechnicalTask, acknowledgeCateringTask, refreshData
+      addService, removeService, updateServicePrice, 
+      acknowledgeTechnicalTask, toggleTechnicalServiceAvailability, acknowledgeCateringTask, toggleSupportServiceAvailability, 
+      refreshData
     }}>
       {children}
     </AppContext.Provider>
