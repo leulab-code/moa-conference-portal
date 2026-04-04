@@ -33,7 +33,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
     venueId: '', eventTitle: '', eventDescription: '', organizerName: '', organizerOrganization: '', organizerEmail: '', organizerPhone: '',
     startDate: '', endDate: '', participantCount: '', technicalServices: [] as string[], supportServices: [] as string[],
     dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
-    status: 'override', 
+    status: 'approved', // FIXED: VIP override is now "approved" in the backend!
     asGuest: !user, 
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -55,7 +55,8 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
   const bookedDates = useMemo(() => {
     if (!form.venueId) return [];
     const dates: Date[] = [];
-    bookings.filter(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'override')
+    // FIXED: Look for 'approved' instead of 'override'
+    bookings.filter(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'approved')
     .forEach(b => {
       try {
         const start = parseISO(b.startDate); const end = parseISO(b.endDate);
@@ -67,14 +68,16 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
 
   const existingSchedules = useMemo(() => {
     if (!form.venueId) return [];
+    // FIXED: Using new active statuses
     const vBookings = bookings?.filter(b => 
       b.venueId?.toString() === form.venueId?.toString() && 
-      ['reserved', 'approved', 'confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '')
+      ['pending', 'partial_paid', 'paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '')
     );
     
     const schedules: { date: string, start: string, end: string, isHard: boolean }[] = [];
     vBookings?.forEach(b => {
-      const isHard = ['confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '');
+      // FIXED: Hard bookings are now paid or approved
+      const isHard = ['paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '');
       
       if (b.dailySchedules && b.dailySchedules.length > 0) {
         b.dailySchedules.forEach((ds: any) => schedules.push({ date: ds.date, start: ds.startTime, end: ds.endTime, isHard }));
@@ -176,7 +179,6 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
         }
       }
 
-      // STRICT PAX VALIDATION
       if (!form.participantCount || isNaN(parseInt(form.participantCount)) || parseInt(form.participantCount) <= 0) {
         errs.participantCount = 'Required';
       } else if (selectedVenue && parseInt(form.participantCount) > selectedVenue.capacity) {
@@ -185,12 +187,14 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
 
       setClashWarning(null);
       if (form.venueId && form.startDate && form.endDate && !errs.startDate) {
-        const vipConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'override' && b.startDate <= form.endDate && b.endDate >= form.startDate);
+        // FIXED: VIP conflict checks for 'approved'
+        const vipConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && b.status.toLowerCase() === 'approved' && b.startDate <= form.endDate && b.endDate >= form.startDate);
         if (vipConflict) {
            errs.startDate = 'This date is already secured by another VIP Override.';
            toast.error('Another VIP has already secured these dates!');
         } else {
-           const regConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && ['confirmed', 'approved', 'reserved', 'paid', 'partial_paid', 'pending'].includes(b.status.toLowerCase()) && b.startDate <= form.endDate && b.endDate >= form.startDate);
+           // FIXED: Regular conflict checks for pending, partial_paid, paid
+           const regConflict = bookings.find(b => b.venueId.toString() === form.venueId.toString() && ['pending', 'partial_paid', 'paid'].includes(b.status.toLowerCase()) && b.startDate <= form.endDate && b.endDate >= form.startDate);
            if (regConflict) {
               setClashWarning(`Warning: This VIP booking overlaps with "${regConflict.eventTitle || regConflict.event_title}". Proceeding will automatically cancel their booking.`);
            }
@@ -212,7 +216,45 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
   const handleSubmit = async () => {
     if (!validateStep(1) || !validateStep(2)) return;
     try {
-      const data = await addBooking({ ...form, participantCount: parseInt(form.participantCount) });
+      const finalTotal = venueFee + serviceFee;
+
+      const payload = {
+        ...form, 
+        status: 'approved', // FIXED: explicitly inject approved status
+        name: form.organizerName,
+        full_name: form.organizerName,
+        organizer_name: form.organizerName,
+        organizerName: form.organizerName,
+        email: form.organizerEmail,
+        contact_email: form.organizerEmail,
+        organizer_email: form.organizerEmail,
+        organizerEmail: form.organizerEmail,
+        phone: form.organizerPhone,
+        contact_phone: form.organizerPhone,
+        organizer_phone: form.organizerPhone,
+        organization: form.organizerOrganization,
+        organizer_organization: form.organizerOrganization,
+        totalPrice: finalTotal,
+        total_price: finalTotal,
+        venueId: form.venueId,
+        venue: form.venueId,
+        eventTitle: `⭐ [VIP OVERRIDE] ${form.eventTitle}`, 
+        event_title: `⭐ [VIP OVERRIDE] ${form.eventTitle}`,
+        eventDescription: form.eventDescription,
+        event_description: form.eventDescription,
+        startDate: form.startDate,
+        start_date: form.startDate,
+        endDate: form.endDate,
+        end_date: form.endDate,
+        participantCount: parseInt(form.participantCount) || 0,
+        participant_count: parseInt(form.participantCount) || 0,
+        technicalServices: form.technicalServices,
+        technical_services: form.technicalServices,
+        supportServices: form.supportServices,
+        support_services: form.supportServices,
+      };
+
+      const data = await addBooking(payload);
       setSubmittedBookingId(data.id || data.reference_id || data.pk || 'UNKNOWN');
       toast.success('VIP Override Successful!');
     } catch (error) { toast.error('Submission error'); }
@@ -327,6 +369,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
                 <select value={form.venueId} onChange={e => setForm(p => ({ ...p, venueId: e.target.value }))} className={inputClass('venueId')}>
                   <option value="">Choose...</option>
                   {venues.map(v => {
+                    // @ts-ignore
                     const isBroken = v.status === 'out_of_order';
                     return (
                       <option key={v.id} value={v.id} disabled={isBroken}>
@@ -379,7 +422,7 @@ export default function VIPBookingForm({ onComplete }: { onComplete: () => void 
             </div>
 
             {clashWarning && (
-              <div className="bg-amber-50 text-amber-700 p-4 rounded-xl border border-amber-200 flex gap-3 animate-in pop-in">
+              <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 flex gap-3 animate-in pop-in">
                 <AlertTriangle className="w-5 h-5 shrink-0" />
                 <p className="text-sm font-bold">{clashWarning}</p>
               </div>
