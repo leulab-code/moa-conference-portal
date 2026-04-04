@@ -352,6 +352,10 @@ export default function CalendarView() {
                       // Fetch the correct styles dynamically based on Role
                       let cfg = getStatusProps(b.status, isAdmin);
                       
+                      // GET VENUE NAME
+                      const venueInfo = venues.find(v => v.id?.toString() === b.venueId?.toString());
+                      const venueName = venueInfo?.name || 'Unknown Venue';
+                      
                       return (
                         <div 
                           key={b.id} 
@@ -381,7 +385,13 @@ export default function CalendarView() {
                               {b.eventTitle}
                            </div>
 
-                           {/* NEW: Added Time Display for everyone to see availability */}
+                           {/* NEW: Added Hall/Venue Name Display */}
+                           <div className={`flex items-center gap-1 mt-0.5 text-[9px] font-bold opacity-80 ${isAdmin ? 'pl-3.5 text-slate-500' : 'text-slate-600'}`}>
+                              <MapPin size={10} className="shrink-0" />
+                              <span className="truncate">{venueName}</span>
+                           </div>
+
+                           {/* Added Time Display for everyone to see availability */}
                            <div className={`flex items-center gap-1 mt-0.5 text-[9px] font-bold opacity-80 ${isAdmin ? 'pl-3.5 text-slate-500' : 'text-slate-600'}`}>
                               <Clock size={10} className="shrink-0" />
                               <span className="truncate">{b.startTime} - {b.endTime}</span>

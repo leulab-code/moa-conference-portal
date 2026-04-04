@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight, ChevronLeft, ChevronRight, Building, CheckCircle2, Building2, Users,
   X, Calendar as CalendarIcon, Clock, User, Mail, Phone, Info, Tag, CalendarCheck, AlertTriangle,
-  MapPin, Send, ShieldCheck, ArrowUpRight, Globe
+  MapPin, Send, ShieldCheck, ArrowUpRight, Globe, Crown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, API_BASE, mapBooking } from '@/lib/app-context';
@@ -23,7 +23,6 @@ const getEthDateString = (gregStr: string) => {
   if (!gregStr) return '';
   try {
     const [y, m, d] = gregStr.split('-').map(Number);
-    // Use noon to avoid timezone slippage
     const gDate = new Date(y, m - 1, d, 12, 0, 0);
     const ethDate = EthDateTime.fromEuropeanDate(gDate);
     return `${ETH_MONTHS[ethDate.month - 1]} ${ethDate.date}, ${ethDate.year}`;
@@ -51,20 +50,15 @@ const formatEthTime = (timeStr: string) => {
   try {
     const [hStr, m] = timeStr.split(':');
     const h = parseInt(hStr, 10);
-
-    // Ethiopian Local Time
-    // 6 AM is 12:00, 7 AM is 1:00, etc.
     let ethHr = h >= 6 ? h - 6 : h + 6;
     if (ethHr > 12) ethHr -= 12;
     if (ethHr === 0) ethHr = 12;
-
     return `${ethHr}:${m}`;
   } catch {
     return timeStr;
   }
 };
 
-// Abstract images for different venue types
 const getVenueImage = (type: string) => {
   const images: Record<string, string> = {
     'Cinema': 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?auto=format&fit=crop&q=80&w=800',
@@ -162,15 +156,9 @@ function Counter({ value, duration = 2500 }: { value: number; duration?: number 
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
       const progress = Math.min((timestamp - startTime) / duration, 1);
-      
-      // Professional Ease-Out Quintic for extreme smoothness
       const easedProgress = 1 - Math.pow(1 - progress, 5); 
-      
       setCount(Math.floor(easedProgress * value));
-      
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
+      if (progress < 1) requestAnimationFrame(animate);
     };
     requestAnimationFrame(animate);
   }, [isVisible, value, duration]);
@@ -219,16 +207,28 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
       >
         {pages.map((page, pIdx) => (
           <div key={pIdx} className="w-full shrink-0 space-y-2 px-0.5">
-            {page.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => onSelect(b)}
-                className="w-full flex items-center justify-between bg-slate-50/50 px-3 py-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-all active:scale-[0.98] group/item"
-              >
-                <span className="text-xs font-bold text-slate-700 group-hover/item:text-emerald-700">{getFullEthDate(b.startDate)}</span>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight group-hover/item:text-emerald-600">{formatEthTime(b.startTime)} - {formatEthTime(b.endTime)} (Local-Time)</span>
-              </button>
-            ))}
+            {page.map((b) => {
+              const isConfirmed = ['paid', 'approved'].includes(b.status.toLowerCase());
+
+              return (
+                <button
+                  key={b.id}
+                  onClick={() => onSelect(b)}
+                  className="w-full flex items-center justify-between bg-slate-50/50 px-3 py-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-all active:scale-[0.98] group/item"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700 group-hover/item:text-emerald-700">{getFullEthDate(b.startDate)}</span>
+                  </div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight group-hover/item:text-emerald-600 flex items-center gap-1.5">
+                    {/* NEW: Explicitly Show Confirmed vs Pending */}
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] ${isConfirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {isConfirmed ? 'Confirmed' : 'Pending'}
+                    </span>
+                    {formatEthTime(b.startTime)} - {formatEthTime(b.endTime)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -254,26 +254,25 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
           </div>
         </div>
       )}
-
-      {bookings.length > 3 && totalPages === 1 && (
-        <p className="text-[10px] font-bold text-slate-400 text-center mt-2 uppercase tracking-widest">End of schedule</p>
-      )}
     </div>
   );
 }
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { venues, technicalServices, supportServices, token } = useApp();
+  const { venues, technicalServices, supportServices, token, role } = useApp();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
+
+  // VIP Logic Filter (Admins can see and book, users just see the badge)
+  const isPrivilegedUser = ['leadership', 'system_admin', 'event_management'].includes(role || '');
 
   useEffect(() => {
     if (HERO_IMAGES.length <= 1) return;
     const interval = setInterval(() => {
       setCurrentHeroIndex((prev) => (prev + 1) % HERO_IMAGES.length);
-    }, 8000); // 8 seconds per slide for a premium slow feel
+    }, 8000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -290,7 +289,8 @@ export default function LandingPage() {
     fetchPublicBookings();
   }, []);
 
-  const ACTIVE_STATUSES = ['confirmed', 'approved', 'reserved', 'override'];
+  // NEW: Updated to match the actual DB statuses!
+  const ACTIVE_STATUSES = ['pending', 'partial_paid', 'paid', 'approved'];
 
   const getVenueStatus = (venueId: string) => {
     const now = new Date();
@@ -301,7 +301,6 @@ export default function LandingPage() {
       let todayStartTime: string | null = null;
       let todayEndTime: string | null = null;
 
-      // Check daily schedules first for multi-day bookings
       if (b.dailySchedules && b.dailySchedules.length > 0) {
         const ds = b.dailySchedules.find(d => d.date === todayStr);
         if (ds) {
@@ -309,7 +308,6 @@ export default function LandingPage() {
           todayEndTime = ds.allDay ? '23:59' : (ds.endTime || b.endTime);
         }
       } else if (b.startDate <= todayStr && b.endDate >= todayStr) {
-        // Fallback: check if today falls within the booking's date range
         todayStartTime = b.startTime;
         todayEndTime = b.endTime;
       }
@@ -358,13 +356,11 @@ export default function LandingPage() {
 
     for (const b of activeBookings) {
       if (b.dailySchedules && b.dailySchedules.length > 0) {
-        // Expand each daily schedule into a separate entry with correct date & times
         for (const ds of b.dailySchedules) {
           const schedDate = ds.date;
           const sTime = ds.allDay ? '00:00' : (ds.startTime || b.startTime);
           const eTime = ds.allDay ? '23:59' : (ds.endTime || b.endTime);
 
-          // Include if it's a future date, or today but hasn't ended yet
           if (schedDate > todayStr || (schedDate === todayStr && eTime > nowTimeStr)) {
             entries.push({
               ...b,
@@ -376,7 +372,6 @@ export default function LandingPage() {
           }
         }
       } else {
-        // Single-day or legacy booking without daily schedules
         if (b.endDate > todayStr || (b.endDate === todayStr && b.endTime > nowTimeStr)) {
           entries.push(b);
         }
@@ -419,7 +414,6 @@ export default function LandingPage() {
       >
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-10">
-            {/* LOGO REDIRECTS TO HOME */}
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
               <div className="w-12 h-12 flex items-center justify-center shrink-0">
                 <img src={moaLogo} alt="MoA Logo" className="w-full h-full object-contain" />
@@ -475,7 +469,6 @@ export default function LandingPage() {
             ))}
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/50 to-black/95" />
             
-            {/* Slider Indicators */}
             {HERO_IMAGES.length > 1 && (
               <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 flex gap-2">
                 {HERO_IMAGES.map((_, idx) => (
@@ -549,8 +542,9 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
               {venues.map((venue, i) => {
                 const isOutOfOrder = venue.status === 'out_of_order';
+                // VIP Identifier Check
+                const isVipVenue = (venue.name || '').toLowerCase().includes('vip');
                 
-                // NEW: Split the purpose string into an array
                 const purposes = (venue.bestFor || venue.best_for || 'General Facility').split(',').map((p: string) => p.trim()).filter(Boolean);
 
                 return (
@@ -570,22 +564,31 @@ export default function LandingPage() {
                       )}
 
                       {/* STATUS BADGE (Top Left) */}
-                      {!isOutOfOrder && (
-                        <div className="absolute top-4 left-4 z-10">
-                          {(() => {
-                            const status = getVenueStatus(venue.id);
-                            return (
-                              <button
-                                onClick={() => status.booking && setActiveBooking(status.booking)}
-                                className={`flex items-center gap-2 ${status.bgColor} backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-lg transition-all ${status.booking ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'}`}
-                              >
-                                <span className={`w-2 h-2 rounded-full ${status.color} animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.5)]`}></span>
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${status.textColor}`}>{status.label}</span>
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      )}
+                      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+                        {!isOutOfOrder && (
+                          <div className="w-fit">
+                            {(() => {
+                              const status = getVenueStatus(venue.id);
+                              return (
+                                <button
+                                  onClick={() => status.booking && setActiveBooking(status.booking)}
+                                  className={`flex items-center gap-2 ${status.bgColor} backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-lg transition-all ${status.booking ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'}`}
+                                >
+                                  <span className={`w-2 h-2 rounded-full ${status.color} animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.5)]`}></span>
+                                  <span className={`text-[10px] font-black uppercase tracking-wider ${status.textColor}`}>{status.label}</span>
+                                </button>
+                              );
+                            })()}
+                          </div>
+                        )}
+                        
+                        {/* VIP EXCLUSIVE BADGE */}
+                        {isVipVenue && (
+                          <span className="w-fit text-[9px] uppercase tracking-widest px-3 py-1.5 rounded-xl font-black bg-purple-600 text-white shadow-lg flex items-center gap-1 border border-purple-400">
+                            <Crown size={10} /> VIP EXCLUSIVE
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="px-3 flex-1 flex flex-col relative z-30">
@@ -596,7 +599,6 @@ export default function LandingPage() {
                         </span>
                       </div>
                       
-                      {/* HIGHLY VISIBLE PAX AND MONEY BADGES */}
                       <div className="flex items-center gap-3 mb-6 mt-3">
                         <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border ${isOutOfOrder ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm'}`}>
                           <Users size={16} className={isOutOfOrder ? 'text-slate-400' : 'text-emerald-500'} /> 
@@ -629,7 +631,6 @@ export default function LandingPage() {
 
                         </div>
                         
-                        {/* NEW: Bulleted List for Capabilities/Purpose */}
                         <div className="flex flex-col mb-8">
                           <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Ideal Setting For</span>
                           <div className="flex flex-col gap-2">
@@ -647,10 +648,14 @@ export default function LandingPage() {
                           </div>
                         </div>
 
-                        {/* Disable the booking button if out of order */}
+                        {/* NEW: Lock button for VIP Venues if user is not an Admin/Leadership */}
                         {isOutOfOrder ? (
                           <button disabled className="w-full py-5 text-sm font-black bg-slate-200 text-slate-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed">
                             Venue Unavailable
+                          </button>
+                        ) : isVipVenue && !isPrivilegedUser ? (
+                          <button disabled className="w-full py-5 text-sm font-black bg-purple-50 text-purple-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed border border-purple-200">
+                            <Crown className="w-4 h-4" /> VIP Exclusive Facility
                           </button>
                         ) : (
                           <button onClick={() => navigate(`/book?venueId=${venue.id}`)} className="w-full py-5 text-sm font-black bg-[#111827] text-white hover:bg-[#268053] transition-all duration-300 rounded-2xl shadow-xl flex items-center justify-center gap-2 group/btn">
