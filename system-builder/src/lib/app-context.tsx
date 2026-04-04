@@ -346,21 +346,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshData, getHeaders]);
 
-  const updateBookingStatus = useCallback(async (id: string, status: Booking['status'], reason?: string) => {
-    try {
-      const res = await fetch(`${API_BASE}/bookings/${id}/update_status/`, {
-        method: 'PATCH',
-        headers: getHeaders(),
-        body: JSON.stringify({ status, rejection_reason: reason }),
-      });
-      if (res.ok) {
-        toast.success(`Booking ${status}`);
-        refreshData();
-      }
-    } catch (error) {
-      toast.error('Update failed');
+ const updateBookingStatus = async (id: string, status: string, reason?: string) => {
+  try {
+    const res = await fetch(`${API_BASE}/bookings/${id}/update_status/`, {
+      method: 'PATCH', // Ensure this is PATCH
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${token}`,
+      },
+      body: JSON.stringify({ 
+        status: status, // This must be the raw string: 'paid', 'approved', etc.
+        rejection_reason: reason 
+      }),
+    });
+
+    if (!res.ok) {
+      // This will help us see the error in the console
+      const errorData = await res.json();
+      console.error("SERVER ERROR DETAIL:", errorData);
+      throw new Error(JSON.stringify(errorData));
     }
-  }, [refreshData, getHeaders]);
+
+    await fetchBookings(); // Refresh list after success
+  } catch (err) {
+    console.error("Update failed:", err);
+    throw err;
+  }
+};
 
   const cancelBooking = useCallback(async (id: string) => {
     try {
