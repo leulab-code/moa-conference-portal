@@ -12,18 +12,19 @@ import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calenda
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 import { Booking } from '@/lib/types';
 
+// 1. UPDATED STATUS STYLES TO MATCH NEW BACKEND
 const statusStyles: Record<string, { bg: string, text: string, label: string, dot: string }> = {
-  reserved: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Review', dot: 'bg-amber-500' },
-  approved: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Awaiting Payment', dot: 'bg-blue-500' },
-  confirmed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Confirmed (Paid)', dot: 'bg-emerald-500' },
-  override: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'VIP Override', dot: 'bg-purple-500' },
+  pending: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending / Tentative', dot: 'bg-amber-500' },
+  partial_paid: { bg: 'bg-blue-50', text: 'text-blue-700', label: '1st Round Paid', dot: 'bg-blue-500' },
+  paid: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Fully Paid', dot: 'bg-emerald-500' },
+  approved: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'VIP Approved', dot: 'bg-purple-500' },
   rejected: { bg: 'bg-red-50', text: 'text-red-700', label: 'Rejected', dot: 'bg-red-500' },
   cancelled: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Cancelled', dot: 'bg-slate-400' },
   completed: { bg: 'bg-slate-800', text: 'text-white', label: 'Completed', dot: 'bg-white' },
 };
 
-// Removed 'pending' to combine everything needing admin action into 'payment' (Awaiting Action)
-type TabFilter = 'payment' | 'confirmed' | 'vip' | 'rejected' | 'all';
+// 2. UPDATED TABS TO REFLECT PARTIAL AND FULL PAID
+type TabFilter = 'action' | 'partial' | 'confirmed' | 'vip' | 'rejected' | 'all';
 
 // --- ETHIOPIAN DATE CONVERTER ---
 const toEthDateString = (gStr: string | undefined | null) => {
@@ -40,7 +41,7 @@ const toEthDateString = (gStr: string | undefined | null) => {
 
 export default function ManageBookings() {
   const { bookings, updateBookingStatus, cancelBooking, venues, technicalServices, supportServices } = useApp();
-  const [activeTab, setActiveTab] = useState<TabFilter>('payment');
+  const [activeTab, setActiveTab] = useState<TabFilter>('action');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -61,7 +62,6 @@ export default function ManageBookings() {
 
   const [clashWarning, setClashWarning] = useState<{ isOpen: boolean, clashingBooking: Booking | null, attemptedAction?: { id: string, status: string } }>({ isOpen: false, clashingBooking: null });
 
-  // 1. First apply Venue, Date, and Specific Status filters
   const baseFilteredBookings = bookings.filter(b => {
     let venueMatch = true;
     if (filterVenue !== 'all') {
@@ -88,21 +88,23 @@ export default function ManageBookings() {
     return venueMatch && dateMatch && statusMatch;
   });
 
-  // 2. Calculate dynamic counts based on the filtered results
+  // 3. UPDATED DYNAMIC COUNTS FOR NEW STATUSES
   const counts = {
-    payment: baseFilteredBookings.filter(b => ['reserved', 'approved'].includes(b.status)).length,
-    confirmed: baseFilteredBookings.filter(b => ['confirmed', 'completed'].includes(b.status)).length,
-    vip: baseFilteredBookings.filter(b => b.status === 'override').length,
+    action: baseFilteredBookings.filter(b => b.status === 'pending').length,
+    partial: baseFilteredBookings.filter(b => b.status === 'partial_paid').length,
+    confirmed: baseFilteredBookings.filter(b => ['paid', 'completed'].includes(b.status)).length,
+    vip: baseFilteredBookings.filter(b => b.status === 'approved').length,
     rejected: baseFilteredBookings.filter(b => ['rejected', 'cancelled'].includes(b.status)).length,
     all: baseFilteredBookings.length,
   };
 
-  // 3. Finally, apply the Tab (Category) filter for display
+  // 4. UPDATED TAB FILTERING FOR NEW STATUSES
   const finalFilteredBookings = baseFilteredBookings.filter(b => {
     if (activeTab === 'all') return true;
-    if (activeTab === 'payment') return ['reserved', 'approved'].includes(b.status);
-    if (activeTab === 'confirmed') return ['confirmed', 'completed'].includes(b.status);
-    if (activeTab === 'vip') return b.status === 'override';
+    if (activeTab === 'action') return b.status === 'pending';
+    if (activeTab === 'partial') return b.status === 'partial_paid';
+    if (activeTab === 'confirmed') return ['paid', 'completed'].includes(b.status);
+    if (activeTab === 'vip') return b.status === 'approved';
     if (activeTab === 'rejected') return ['rejected', 'cancelled'].includes(b.status);
     return true;
   });
@@ -118,8 +120,8 @@ export default function ManageBookings() {
     e?.stopPropagation();
     const targetBooking = bookings.find(b => String(b.id) === String(id));
 
-    // CLASH ENGINE
-    if (targetBooking && ['confirmed', 'override'].includes(status)) {
+    // CLASH ENGINE - Updated to check against paid/approved
+    if (targetBooking && ['paid', 'approved'].includes(status)) {
       const clashingBooking = bookings.find(other => {
         if (String(other.id) === String(targetBooking.id)) return false;
 
@@ -127,7 +129,7 @@ export default function ManageBookings() {
         const oVenue = other.venue || other.venueId;
         if (String(oVenue) !== String(tVenue)) return false;
 
-        if (!['confirmed', 'override', 'completed'].includes(other.status)) return false;
+        if (!['paid', 'approved', 'completed'].includes(other.status)) return false;
 
         const tStartD = targetBooking.start_date || targetBooking.startDate;
         const tEndD = targetBooking.end_date || targetBooking.endDate;
@@ -155,8 +157,9 @@ export default function ManageBookings() {
     }
 
     let msg = `Change status to ${status}?`;
-    if (status === 'override') msg = 'Apply VIP Override? This bypasses standard payment checks and secures the venue, automatically cancelling conflicting events.';
-    if (status === 'confirmed') msg = 'Confirm that payment has been received?';
+    if (status === 'partial_paid') msg = 'Confirm 1st Round Payment received?';
+    if (status === 'paid') msg = 'Confirm Full Payment received?';
+    if (status === 'approved') msg = 'Approve VIP Override? WARNING: This will immediately REJECT any conflicting standard bookings.';
 
     if (confirm(msg)) {
       try {
@@ -228,15 +231,15 @@ export default function ManageBookings() {
                 </div>
               </div>
 
-              {clashWarning.attemptedAction?.status === 'override' ? (
+              {clashWarning.attemptedAction?.status === 'approved' ? (
                 <div className="space-y-4">
                   <p className="text-sm font-bold text-red-600 text-center px-4">
-                    Continuing with a VIP Override will <span className="underline uppercase font-black">automatically cancel</span> the existing booking.
+                    Continuing with a VIP Override will <span className="underline uppercase font-black">automatically reject</span> the existing booking.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button variant="outline" className="flex-1 font-bold h-12" onClick={() => setClashWarning({ isOpen: false, clashingBooking: null })}>Cancel</Button>
                     <Button className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold h-12 shadow-md" onClick={() => {
-                      updateBookingStatus(clashWarning.attemptedAction!.id, 'override');
+                      updateBookingStatus(clashWarning.attemptedAction!.id, 'approved');
                       setClashWarning({ isOpen: false, clashingBooking: null });
                     }}><Star className="w-4 h-4 mr-2" /> Force VIP Override</Button>
                   </div>
@@ -281,7 +284,7 @@ export default function ManageBookings() {
             </select>
           </div>
 
-          {/* Specific Status Dropdown */}
+          {/* Specific Status Dropdown UPDATED */}
           <div className="relative w-full sm:w-auto">
             <Activity className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <select
@@ -290,10 +293,10 @@ export default function ManageBookings() {
               className="w-full sm:w-44 pl-9 pr-8 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] appearance-none cursor-pointer transition-all"
             >
               <option value="all">All Statuses</option>
-              <option value="reserved">Pending Review</option>
-              <option value="approved">Awaiting Payment</option>
-              <option value="confirmed">Confirmed (Paid)</option>
-              <option value="override">VIP Override</option>
+              <option value="pending">Pending Review</option>
+              <option value="partial_paid">1st Round Paid</option>
+              <option value="paid">Confirmed (Fully Paid)</option>
+              <option value="approved">VIP Approved</option>
               <option value="completed">Completed</option>
               <option value="rejected">Rejected</option>
               <option value="cancelled">Cancelled</option>
@@ -340,18 +343,19 @@ export default function ManageBookings() {
         </div>
       </div>
 
-      {/* Tab Filters (Categories) - ONLY 5 TABS NOW */}
+      {/* Tab Filters (Categories) */}
       <div className="flex overflow-x-auto pb-2 mb-6 border-b border-slate-200 hide-scrollbar">
-        {(['payment', 'confirmed', 'vip', 'rejected', 'all'] as TabFilter[]).map((tab) => (
+        {(['action', 'partial', 'confirmed', 'vip', 'rejected', 'all'] as TabFilter[]).map((tab) => (
           <button
             key={tab}
             onClick={() => { setActiveTab(tab); setExpandedId(null); setRejectingId(null); }}
             className={`whitespace-nowrap px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === tab ? 'border-[#268053] text-[#268053]' : 'border-transparent text-slate-400 hover:text-slate-700 hover:border-slate-300'
               }`}
           >
-            {tab === 'payment' ? 'Awaiting Action' :
-             tab === 'confirmed' ? 'Confirmed' :
-             tab === 'vip' ? 'VIP Overrides' :
+            {tab === 'action' ? 'Awaiting Action' :
+             tab === 'partial' ? '1st Round Paid' :
+             tab === 'confirmed' ? 'Fully Paid' :
+             tab === 'vip' ? 'VIP Approved' :
              tab === 'rejected' ? 'Rejected' : 'All Bookings'}
             <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs transition-colors ${activeTab === tab ? 'bg-[#268053] text-white' : 'bg-slate-100 text-slate-500'
               }`}>
@@ -421,7 +425,9 @@ export default function ManageBookings() {
 
           const isExpanded = expandedId === safeId;
           const isRejecting = rejectingId === safeId;
-          const style = statusStyles[b.status] || statusStyles.reserved;
+          // Apply new fallback logic to ensure styles load correctly
+          const statusLower = (b.status || '').toLowerCase();
+          const style = statusStyles[statusLower] || statusStyles.pending;
 
           const hasTechnicalConflict = b.ictAcknowledged && allRequestedServices.some(s => s.type === 'tech' && s.isUnavailable);
           const hasCateringConflict = b.cateringAcknowledged && allRequestedServices.some(s => s.type === 'supp' && s.isUnavailable);
@@ -479,29 +485,46 @@ export default function ManageBookings() {
                   </div>
 
                   <div className="flex items-center gap-2 justify-end">
-                    {/* Approve / VIP / Reject Buttons */}
-                    {['reserved', 'approved'].includes(b.status) && !isRejecting && (
+                    
+                    {/* Normal Users Payment Flow */}
+                    {statusLower === 'pending' && !isRejecting && !isVipBooking && (
                       <>
-                        {!isVipBooking ? (
-                          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'confirmed', e)}>
-                            <CreditCard className="w-4 h-4 mr-2" /> Confirm Paid
-                          </Button>
-                        ) : (
-                          <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'override', e)}>
-                            <Star className="w-4 h-4 mr-2" /> Approve VIP Override
-                          </Button>
-                        )}
-
-                        <Button variant="outline" className="text-red-600 hover:bg-red-50 border-red-200" onClick={(e) => handleInitReject(safeId, e)}>
-                          <XCircle className="w-4 h-4" />
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'partial_paid', e)}>
+                          Confirm 1st Round
+                        </Button>
+                        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'paid', e)}>
+                          Confirm Full Paid
                         </Button>
                       </>
                     )}
-                    {['confirmed', 'override'].includes(b.status) && (
-                      <Button variant="outline" className="text-slate-700 border-slate-300 font-bold" onClick={(e) => handleStatusChange(safeId, 'completed', e)}>
+
+                    {statusLower === 'partial_paid' && !isRejecting && (
+                      <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'paid', e)}>
+                        Confirm Full Paid
+                      </Button>
+                    )}
+
+                    {/* VIP Users Approval Flow */}
+                    {statusLower === 'pending' && !isRejecting && isVipBooking && (
+                      <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'approved', e)}>
+                        <Star className="w-4 h-4 mr-2" /> Approve VIP
+                      </Button>
+                    )}
+
+                    {/* Both can be rejected from pending or partial */}
+                    {['pending', 'partial_paid'].includes(statusLower) && !isRejecting && (
+                      <Button variant="outline" className="text-red-600 hover:bg-red-50 border-red-200 shadow-sm" onClick={(e) => handleInitReject(safeId, e)}>
+                        <XCircle className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {/* Completion from paid or VIP approved */}
+                    {['paid', 'approved'].includes(statusLower) && (
+                      <Button variant="outline" className="text-slate-700 border-slate-300 font-bold shadow-sm" onClick={(e) => handleStatusChange(safeId, 'completed', e)}>
                         Mark Completed
                       </Button>
                     )}
+
                     <ChevronDown className={`w-5 h-5 text-slate-400 ml-2 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
                 </div>
@@ -612,7 +635,12 @@ export default function ManageBookings() {
                         <div className="flex flex-col gap-1 border-t border-white/10 pt-4 relative z-10">
                           <div className="flex justify-between text-xs font-medium text-emerald-100">
                             <span>Payment Status:</span>
-                            <span className="font-bold">{b.status === 'confirmed' ? 'PAID' : b.status === 'override' ? 'WAIVED' : 'PENDING'}</span>
+                            <span className="font-bold">
+                              {statusLower === 'paid' ? 'FULLY PAID' : 
+                               statusLower === 'partial_paid' ? '1ST ROUND PAID' :
+                               statusLower === 'approved' ? 'VIP (WAIVED)' : 
+                               'PENDING'}
+                            </span>
                           </div>
                         </div>
                       </div>

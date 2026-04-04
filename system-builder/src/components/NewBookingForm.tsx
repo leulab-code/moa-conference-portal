@@ -3,8 +3,8 @@ import { useApp } from '@/lib/app-context';
 import { DailySchedule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { format, parseISO, eachDayOfInterval } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Eraser, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock, Crown } from 'lucide-react';
+import { format, parseISO, eachDayOfInterval, startOfDay } from 'date-fns';
+import { Calendar as CalendarIcon, Clock, Users, CheckCircle2, Paperclip, Sparkles, Receipt, Building2, ShieldAlert, MonitorSmartphone, Coffee, AlertTriangle, Lock, AlignLeft, Ticket, Phone } from 'lucide-react';
 import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 
@@ -45,7 +45,6 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     organizerEmail: user?.email || '', 
     organizerPhone: user?.phone || '',
     startDate: '', endDate: '', participantCount: '', 
-    isVip: false, // VIP FLAG
     technicalServices: [] as string[], supportServices: [] as string[],
     dailySchedules: [] as DailySchedule[], letterAttachment: null as File | null,
   });
@@ -84,14 +83,15 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
 
   const existingSchedules = useMemo(() => {
     if (!form.venueId) return [];
+    
     const vBookings = bookings?.filter(b => 
       b.venueId?.toString() === form.venueId?.toString() && 
-      ['reserved', 'approved', 'confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '')
+      ['pending', 'partial_paid', 'paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '')
     );
     
     const schedules: { date: string, start: string, end: string, isHard: boolean }[] = [];
     vBookings?.forEach(b => {
-      const isHard = ['confirmed', 'override', 'completed'].includes(b.status?.toLowerCase() || '');
+      const isHard = ['paid', 'approved', 'completed'].includes(b.status?.toLowerCase() || '');
       
       if (b.dailySchedules && b.dailySchedules.length > 0) {
         b.dailySchedules.forEach((ds: any) => schedules.push({ date: ds.date, start: ds.startTime, end: ds.endTime, isHard }));
@@ -196,7 +196,10 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
       if (!form.organizerPhone?.trim() || form.organizerPhone.trim() === '+251') errs.organizerPhone = 'Required';
     } else if (step === 2) {
       if (!form.venueId) errs.venueId = 'Select a venue';
-      if (!form.startDate) errs.startDate = 'Required';
+      
+      if (!form.startDate) {
+        errs.startDate = 'Required';
+      }
       
       // STRICT PAX VALIDATION
       if (!form.participantCount || isNaN(parseInt(form.participantCount)) || parseInt(form.participantCount) <= 0) {
@@ -223,13 +226,10 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
     setIsSubmitting(true);
     try {
       const finalTotal = venueTotal + serviceFee;
-      
-      // Prepend VIP flag to the title so admins clearly see it
-      const finalTitle = form.isVip ? `⭐ [VIP OVERRIDE] ${form.eventTitle}` : form.eventTitle;
 
       const payload = {
         ...form, 
-        status: 'reserved', // FORCE PENDING REVIEW NO MATTER WHAT
+        status: 'pending', // FORCE PENDING REVIEW
         name: form.organizerName,
         full_name: form.organizerName,
         organizer_name: form.organizerName,
@@ -247,8 +247,8 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
         total_price: finalTotal,
         venueId: form.venueId,
         venue: form.venueId,
-        eventTitle: finalTitle,
-        event_title: finalTitle,
+        eventTitle: form.eventTitle, 
+        event_title: form.eventTitle,
         eventDescription: form.eventDescription,
         event_description: form.eventDescription,
         startDate: form.startDate,
@@ -292,17 +292,6 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
            <p className="text-slate-500 font-bold text-sm mb-6 leading-relaxed px-4">
              Your slot is reserved under <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Admin Review</span>.<br/> You will be notified upon confirmation.
            </p>
-
-           {/* VIP OVERRIDE NOTICE */}
-           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8 text-left flex gap-3 shadow-inner">
-             <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
-             <div>
-               <p className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-1">Important Policy Notice</p>
-               <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
-                 As a state facility, high-level Ministerial and VIP events hold supreme priority. Your booking may be subject to overriding or cancellation (with full refund) even after payment is confirmed.
-               </p>
-             </div>
-           </div>
 
            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-5 mb-10 shadow-inner">
              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Your Tracking Reference</p>
@@ -390,17 +379,6 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 <label className="text-xs font-medium text-black uppercase mb-2 block tracking-widest">Description</label>
                 <textarea rows={3} value={form.eventDescription} onChange={e => setForm(p => ({ ...p, eventDescription: e.target.value }))} className={inputClass('eventDescription')} placeholder="Briefly describe the purpose of this booking..." />
               </div>
-              
-              {/* VIP STATE OVERRIDE TOGGLE */}
-              <div className={`mt-4 p-5 border-2 rounded-2xl flex items-start gap-4 transition-all cursor-pointer ${form.isVip ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-200 hover:border-amber-200'}`} onClick={() => setForm(p => ({...p, isVip: !p.isVip}))}>
-                <div className={`w-6 h-6 rounded border flex items-center justify-center shrink-0 mt-0.5 ${form.isVip ? 'bg-amber-500 border-amber-600' : 'bg-white border-slate-300'}`}>
-                  {form.isVip && <CheckCircle2 className="w-4 h-4 text-white" />}
-                </div>
-                <div>
-                  <p className="text-sm font-black text-amber-900 uppercase tracking-widest flex items-center gap-2"><Crown size={16} /> Request VIP State Override</p>
-                  <p className="text-xs font-bold text-amber-700/80 mt-1 leading-relaxed">Flag this booking as a high-priority state event. It will be prioritized but remains pending until an admin manually reviews and overrides the schedule.</p>
-                </div>
-              </div>
 
               <Button onClick={() => validateStep(1) && setCurrentStep(2)} className="w-full h-14 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white rounded-xl font-black tracking-widest uppercase shadow-xl shadow-emerald-900/20 transition-all hover:-translate-y-1">CONTINUE TO VENUE</Button>
             </div>
@@ -438,14 +416,39 @@ export default function NewBookingForm({ onComplete, hideHero = false }: { onCom
                 <div className="bg-slate-50/80 p-4 rounded-2xl flex justify-center border border-slate-100">
                   <EthiopianCalendar 
                     selected={{ from: form.startDate ? parseISO(form.startDate) : undefined, to: form.endDate ? parseISO(form.endDate) : undefined }} 
-                    onSelect={(r) => setForm(p => ({ ...p, startDate: r?.from ? format(r.from, 'yyyy-MM-dd') : '', endDate: r?.to ? format(r.to, 'yyyy-MM-dd') : '' }))} 
+                    onSelect={(r) => {
+                      // CORE FIX: Prevent selecting dates in the past
+                      if (r?.from) {
+                        const today = startOfDay(new Date());
+                        const selectedDate = startOfDay(r.from);
+                        
+                        if (selectedDate < today) {
+                          toast.error("You cannot book a date in the past.");
+                          return; // Stop the selection
+                        }
+                      }
+                      setForm(p => ({ ...p, startDate: r?.from ? format(r.from, 'yyyy-MM-dd') : '', endDate: r?.to ? format(r.to, 'yyyy-MM-dd') : '' }))
+                    }} 
                     bookedDates={hardBookedDates}
                     pendingDates={softBookedDates}
                   />
                 </div>
                 <div className="flex-1 space-y-4 flex flex-col justify-center">
-                  <div className="p-4 border-2 border-slate-100 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm"><span className="text-slate-300">START</span> <span className="text-[#268053]">{form.startDate ? getEthDateString(form.startDate) : '---'}</span></div>
-                  <div className="p-4 border-2 border-slate-100 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm"><span className="text-slate-300">END</span> <span className="text-[#268053]">{form.endDate ? getEthDateString(form.endDate) : '---'}</span></div>
+                  <div className={`p-4 border-2 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm ${errors.startDate ? 'border-red-300 bg-red-50' : 'border-slate-100'}`}>
+                    <span className="text-slate-300">START</span> 
+                    <span className="text-[#268053]">
+                      {form.startDate ? getEthDateString(form.startDate) : '---'}
+                    </span>
+                  </div>
+                  <div className="p-4 border-2 border-slate-100 rounded-xl bg-white text-sm font-black uppercase tracking-widest flex justify-between items-center shadow-sm">
+                    <span className="text-slate-300">END</span> 
+                    <span className="text-[#268053]">
+                      {form.endDate ? getEthDateString(form.endDate) : '---'}
+                    </span>
+                  </div>
+                  {errors.startDate && (
+                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest text-center">{errors.startDate}</p>
+                  )}
                   {errors.rangeConflict && (
                     <div className="bg-red-50 border-2 border-red-200 p-3 rounded-xl text-center shadow-inner animate-in pop-in">
                        <p className="text-xs text-red-700 font-black uppercase tracking-widest flex items-center justify-center gap-2"><ShieldAlert size={14}/> Please resolve time conflicts below</p>

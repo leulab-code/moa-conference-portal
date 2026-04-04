@@ -2,26 +2,7 @@ import { useState, useMemo } from 'react';
 import { useApp, API_BASE } from '@/lib/app-context';
 import { toast } from 'sonner';
 import { 
-  Calendar, 
-  MapPin, 
-  Plus, 
-  CalendarX2, 
-  CheckCircle2,
-  Clock3,
-  XCircle,
-  AlertCircle,
-  Edit,
-  Trash2,
-  Lock,
-  Ticket,
-  Users,
-  Phone,
-  AlignLeft,
-  Save,
-  Monitor,
-  Utensils,
-  ChevronLeft,
-  ChevronRight
+  Calendar, MapPin, Plus, CalendarX2, CheckCircle2, Clock3, XCircle, AlertCircle, Edit, Trash2, Lock, Ticket, Users, Phone, AlignLeft, Save, ChevronLeft, ChevronRight, Crown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
@@ -46,15 +27,9 @@ const isLockedForEditing = (startDate: string, startTime?: string) => {
   try {
     const d = startDate.split('T')[0];
     const t = startTime || '08:00:00';
-    
-    // Construct valid Date object
     const eventDate = new Date(`${d}T${t}`);
     const now = new Date();
-
-    // Difference in hours
     const diffInHours = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    // If it's in the past, or less than 24 hours away, it's locked
     return diffInHours < 24;
   } catch { 
     return false; 
@@ -64,18 +39,15 @@ const isLockedForEditing = (startDate: string, startTime?: string) => {
 export default function BookingsList() {
   const { bookings = [], user, cancelBooking, token, technicalServices = [], supportServices = [] } = useApp();
 
-  // States for Edit Modal
   const [editingBooking, setEditingBooking] = useState<any>(null);
   const [editForm, setEditForm] = useState({ event_title: '', event_description: '', participant_count: 0, organizer_phone: '' });
 
-  // SECURE FILTER: Only show bookings that belong to the logged-in user!
   const myBookings = bookings.filter(b => 
     b.organizerEmail === user?.email || 
     String(b.user) === String(user?.id) || 
-    b.organizer_email === user?.email // Fallback for raw API data
+    b.organizer_email === user?.email
   );
 
-  // Pagination Logic
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const totalPages = Math.ceil(myBookings.length / itemsPerPage);
@@ -87,30 +59,28 @@ export default function BookingsList() {
 
   const getStatusConfig = (status: string) => {
     switch (status?.toLowerCase()) {
-      case 'confirmed':
+      case 'paid':
       case 'completed':
-        return { color: 'text-emerald-700', bg: 'bg-emerald-100', icon: <CheckCircle2 size={16} />, label: 'Confirmed' };
+        return { color: 'text-emerald-700', bg: 'bg-emerald-100', icon: <CheckCircle2 size={16} />, label: 'Confirmed (Paid)' };
+      case 'partial_paid':
+        return { color: 'text-blue-700', bg: 'bg-blue-100', icon: <Clock3 size={16} />, label: '1st Round Paid' };
       case 'approved':
-        return { color: 'text-amber-700', bg: 'bg-amber-100', icon: <Clock3 size={16} />, label: 'Pending Approval' };
+        return { color: 'text-purple-700', bg: 'bg-purple-100', icon: <CheckCircle2 size={16} />, label: 'VIP Approved' };
       case 'rejected':
       case 'cancelled':
         return { color: 'text-red-700', bg: 'bg-red-100', icon: <XCircle size={16} />, label: status.charAt(0).toUpperCase() + status.slice(1) };
-      case 'override':
-        return { color: 'text-purple-700', bg: 'bg-purple-100', icon: <AlertCircle size={16} />, label: 'VIP Override' };
       default:
-        return { color: 'text-slate-700', bg: 'bg-slate-100', icon: <Clock3 size={16} />, label: status || 'Pending' };
+        return { color: 'text-amber-700', bg: 'bg-amber-100', icon: <Clock3 size={16} />, label: 'Pending / Tentative' };
     }
   };
 
-  // FIXED: Back to your working hash routing!
   const navigateToNewBooking = () => {
     window.location.hash = 'new-booking'; 
   };
 
-  // --- ACTIONS ---
   const handleCancel = async (id: string) => {
     if (confirm('Are you certain you wish to cancel this booking? This action cannot be undone.')) {
-      if (cancelBooking) cancelBooking(id); // Use context method if available
+      if (cancelBooking) cancelBooking(id); 
       toast.success('Your booking has been successfully cancelled.');
       setTimeout(() => window.location.reload(), 1000);
     }
@@ -197,7 +167,6 @@ export default function BookingsList() {
           </p>
         </div>
         
-        {/* FIXED: Back to Button with onClick */}
         <Button 
           onClick={navigateToNewBooking} 
           className="h-14 px-8 bg-gradient-to-r from-[#1b5e3a] to-[#268053] hover:from-[#15472c] hover:to-[#1b5e3a] text-white rounded-xl font-black uppercase tracking-widest shadow-xl shadow-emerald-900/20 transition-all hover:-translate-y-1 flex items-center gap-2"
@@ -216,7 +185,6 @@ export default function BookingsList() {
           <p className="text-slate-500 font-bold mb-8 max-w-md">
             You haven't requested any venues yet. Click the button below to start your first facility reservation.
           </p>
-          {/* FIXED: Back to Button with onClick */}
           <Button 
             onClick={navigateToNewBooking} 
             className="h-14 px-10 bg-[#268053] hover:bg-[#1b5e3a] text-white rounded-xl font-black uppercase tracking-widest shadow-lg transition-all hover:-translate-y-1 flex items-center gap-2"
@@ -233,6 +201,8 @@ export default function BookingsList() {
             const startDate = booking.startDate || booking.start_date;
             const endDate = booking.endDate || booking.end_date;
             const startTime = booking.startTime || booking.start_time;
+            const title = booking.eventTitle || booking.event_title || 'Untitled Event';
+            const isVipBooking = title.includes('⭐ [VIP OVERRIDE]');
             
             const unavTech = booking.unavailableTechnicalServices || booking.unavailable_technical_services || [];
             const unavSupp = booking.unavailableSupportServices || booking.unavailable_support_services || [];
@@ -251,7 +221,7 @@ export default function BookingsList() {
             
             // LOCK CHECK ENGINE
             const isLocked = isLockedForEditing(startDate, startTime);
-            const isActiveBooking = ['confirmed', 'approved', 'reserved', 'override'].includes(booking.status?.toLowerCase());
+            const isActiveBooking = ['paid', 'approved', 'pending', 'partial_paid'].includes(booking.status?.toLowerCase());
             
             return (
               <div 
@@ -263,6 +233,11 @@ export default function BookingsList() {
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-md border border-slate-100">
                       REF: MOA-BKG-{booking.id}
                     </span>
+                    {isVipBooking && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-800 border border-amber-200 shadow-sm">
+                          <Crown size={12} /> VIP REQUEST
+                        </span>
+                    )}
                     <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest w-fit ${statusConfig.bg} ${statusConfig.color}`}>
                       {statusConfig.icon} {statusConfig.label}
                     </div>
@@ -270,7 +245,7 @@ export default function BookingsList() {
                   
                   <div>
                     <h3 className="text-xl font-black text-slate-800 tracking-tight mb-2">
-                      {booking.eventTitle || booking.event_title || 'Untitled Event'}
+                      {title}
                     </h3>
                     <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-500">
                       <span className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
