@@ -151,15 +151,10 @@ CSRF_TRUSTED_ORIGINS = [
 # --- EMAIL CONFIGURATION (FIXED FOR RENDER/CLOUD) ---
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-
-# Port 465 is the standard for SSL in cloud environments like Render
-EMAIL_PORT = 465 
-EMAIL_USE_TLS = False  # Set to False when using Port 465
-EMAIL_USE_SSL = True   # Set to True when using Port 465
-
-EMAIL_HOST_USER = config('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=f"MoA Conference Center <{EMAIL_HOST_USER}>")
-
-# Prevents the application from timing out if Gmail is slow to respond
-EMAIL_TIMEOUT = 10
+EMAIL_PORT = 465
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
+EMAIL_HOST_USER = 'leulabetu@gmail.com'
+EMAIL_HOST_PASSWORD = 'njwalntzeeadfjxw' # Your App Password
+DEFAULT_FROM_EMAIL = 'MoA Conference Center <leulabetu@gmail.com>'
+EMAIL_TIMEOUT = 15  # Increased timeout slightly
