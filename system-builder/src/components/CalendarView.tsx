@@ -20,6 +20,23 @@ const getEthDateString = (gregStr: string) => {
   }
 };
 
+// --- ETHIOPIAN TIME CONVERTER (FIXED: Exact match, no 6-hour shift) ---
+const formatEthTime = (timeStr: string | undefined | null) => {
+  if (!timeStr) return '';
+  try {
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    const h = parseInt(parts[0], 10);
+    const m = parts[1];
+    
+    if (isNaN(h)) return timeStr;
+
+    return `${h}:${m}`;
+  } catch {
+    return timeStr;
+  }
+};
+
 // --- NEW: Dual Status Logic ---
 
 // 1. What Admins See (Detailed)
@@ -111,8 +128,9 @@ function EventDetailsModal({ booking, onClose }: { booking: Booking, onClose: ()
                      <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#268053]"><Clock size={20} /></div>
                         <div>
-                           <p className="text-sm font-black text-slate-900 leading-none mb-1">{booking.startTime} - {booking.endTime}</p>
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Access Schedule</p>
+                           {/* FIXED: Time converted correctly here */}
+                           <p className="text-sm font-black text-slate-900 leading-none mb-1">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)}</p>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Access Schedule (Local)</p>
                         </div>
                      </div>
                   </div>
@@ -385,16 +403,16 @@ export default function CalendarView() {
                               {b.eventTitle}
                            </div>
 
-                           {/* NEW: Added Hall/Venue Name Display */}
+                           {/* Hall/Venue Name Display */}
                            <div className={`flex items-center gap-1 mt-0.5 text-[9px] font-bold opacity-80 ${isAdmin ? 'pl-3.5 text-slate-500' : 'text-slate-600'}`}>
                               <MapPin size={10} className="shrink-0" />
                               <span className="truncate">{venueName}</span>
                            </div>
 
-                           {/* Added Time Display for everyone to see availability */}
+                           {/* FIXED: Time Display for everyone to see availability */}
                            <div className={`flex items-center gap-1 mt-0.5 text-[9px] font-bold opacity-80 ${isAdmin ? 'pl-3.5 text-slate-500' : 'text-slate-600'}`}>
                               <Clock size={10} className="shrink-0" />
-                              <span className="truncate">{b.startTime} - {b.endTime}</span>
+                              <span className="truncate">{formatEthTime(b.startTime)} - {formatEthTime(b.endTime)}</span>
                            </div>
                         </div>
                       )
