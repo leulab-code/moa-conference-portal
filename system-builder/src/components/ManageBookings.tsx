@@ -6,13 +6,13 @@ import { format, parseISO } from 'date-fns';
 import {
   ChevronDown, ChevronUp, Clock, XCircle, Users, MapPin, Calendar,
   FileText, Activity, Trash2, Star, CreditCard, User, Mail, Phone,
-  CheckCircle2, AlertTriangle, Building2, ChevronLeft, ChevronRight, Filter, X, Crown
+  CheckCircle2, AlertTriangle, Building2, ChevronLeft, ChevronRight, Filter, X, Crown, Search
 } from 'lucide-react';
 import { EthiopianCalendar, ETH_MONTHS } from '@/components/ui/ethiopian-calendar';
 import { EthDateTime } from 'ethiopian-calendar-date-converter';
 import { Booking } from '@/lib/types';
 
-// 1. UPDATED STATUS STYLES TO MATCH NEW BACKEND
+// 1. STATUS STYLES
 const statusStyles: Record<string, { bg: string, text: string, label: string, dot: string }> = {
   pending: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending / Tentative', dot: 'bg-amber-500' },
   partial_paid: { bg: 'bg-blue-50', text: 'text-blue-700', label: '1st Round Paid', dot: 'bg-blue-500' },
@@ -23,7 +23,6 @@ const statusStyles: Record<string, { bg: string, text: string, label: string, do
   completed: { bg: 'bg-slate-800', text: 'text-white', label: 'Completed', dot: 'bg-white' },
 };
 
-// 2. UPDATED TABS TO REFLECT PARTIAL AND FULL PAID
 type TabFilter = 'action' | 'partial' | 'confirmed' | 'vip' | 'rejected' | 'all';
 
 // --- ETHIOPIAN DATE CONVERTER ---
@@ -39,6 +38,28 @@ const toEthDateString = (gStr: string | undefined | null) => {
   }
 };
 
+// --- ETHIOPIAN TIME CONVERTER (1-12 Local Time) ---
+const formatEthTime = (timeStr: string | undefined | null) => {
+  if (!timeStr) return 'TBD';
+  try {
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    const h = parseInt(parts[0], 10);
+    const m = parts[1];
+    
+    if (isNaN(h)) return timeStr;
+
+    // Convert standard 24h to Ethiopian 12h (6 hour shift)
+    let ethHr = h >= 6 ? h - 6 : h + 6;
+    if (ethHr > 12) ethHr -= 12;
+    if (ethHr === 0) ethHr = 12;
+
+    return `${ethHr}:${m}`;
+  } catch {
+    return timeStr;
+  }
+};
+
 export default function ManageBookings() {
   const { bookings, updateBookingStatus, cancelBooking, venues, technicalServices, supportServices } = useApp();
   const [activeTab, setActiveTab] = useState<TabFilter>('action');
@@ -46,7 +67,8 @@ export default function ManageBookings() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  // Advanced Filtering State
+  // Filtering & Search State
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterVenue, setFilterVenue] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -58,7 +80,7 @@ export default function ManageBookings() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, filterVenue, filterDate, filterStatus]);
+  }, [activeTab, filterVenue, filterDate, filterStatus, searchQuery]);
 
   const [clashWarning, setClashWarning] = useState<{ isOpen: boolean, clashingBooking: Booking | null, attemptedAction?: { id: string, status: string } }>({ isOpen: false, clashingBooking: null });
 
@@ -85,10 +107,25 @@ export default function ManageBookings() {
       statusMatch = b.status === filterStatus;
     }
 
-    return venueMatch && dateMatch && statusMatch;
+    // --- SUPERCHARGED SEARCH LOGIC ---
+    let searchMatch = true;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const vName = venues.find(v => String(v.id) === String(b.venueId || b.venue))?.name || '';
+      const searchableText = `
+        moa-bkg-${b.id}
+        ${b.event_title || b.eventTitle || ''}
+        ${b.organizer_name || b.organizerName || b.name || ''}
+        ${b.organizer_email || b.organizerEmail || b.email || ''}
+        ${b.organizer_phone || b.organizerPhone || b.phone || ''}
+        ${vName}
+      `.toLowerCase();
+      searchMatch = searchableText.includes(q);
+    }
+
+    return venueMatch && dateMatch && statusMatch && searchMatch;
   });
 
-  // 3. UPDATED DYNAMIC COUNTS FOR NEW STATUSES
   const counts = {
     action: baseFilteredBookings.filter(b => b.status === 'pending').length,
     partial: baseFilteredBookings.filter(b => b.status === 'partial_paid').length,
@@ -98,7 +135,6 @@ export default function ManageBookings() {
     all: baseFilteredBookings.length,
   };
 
-  // 4. UPDATED TAB FILTERING FOR NEW STATUSES
   const finalFilteredBookings = baseFilteredBookings.filter(b => {
     if (activeTab === 'all') return true;
     if (activeTab === 'action') return b.status === 'pending';
@@ -120,7 +156,6 @@ export default function ManageBookings() {
     e?.stopPropagation();
     const targetBooking = bookings.find(b => String(b.id) === String(id));
 
-    // CLASH ENGINE - Updated to check against paid/approved
     if (targetBooking && ['paid', 'approved'].includes(status)) {
       const clashingBooking = bookings.find(other => {
         if (String(other.id) === String(targetBooking.id)) return false;
@@ -202,8 +237,8 @@ export default function ManageBookings() {
         const cStartD = cBooking.start_date || cBooking.startDate || '';
         const cEndD = cBooking.end_date || cBooking.endDate || '';
         const cSched = cBooking.daily_schedules || cBooking.dailySchedules;
-        const cTimeStart = cSched?.[0]?.startTime || cBooking.start_time || cBooking.startTime || '00:00';
-        const cTimeEnd = cSched?.[0]?.endTime || cBooking.end_time || cBooking.endTime || '23:59';
+        const cTimeStart = formatEthTime(cSched?.[0]?.startTime || cBooking.start_time || cBooking.startTime);
+        const cTimeEnd = formatEthTime(cSched?.[0]?.endTime || cBooking.end_time || cBooking.endTime);
 
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setClashWarning({ isOpen: false, clashingBooking: null })}>
@@ -226,7 +261,7 @@ export default function ManageBookings() {
                     {cStartD === cEndD ? toEthDateString(cStartD) : `${toEthDateString(cStartD).split(',')[0]} - ${toEthDateString(cEndD)}`}
                   </span>
                   <span className="flex items-center gap-2"><Clock size={16} className="text-red-500" />
-                    {cTimeStart} to {cTimeEnd}
+                    {cTimeStart} to {cTimeEnd} (Local)
                   </span>
                 </div>
               </div>
@@ -259,20 +294,28 @@ export default function ManageBookings() {
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
           <Activity className="w-8 h-8 text-[#268053]" /> Manage Bookings
         </h1>
-        <p className="text-muted-foreground mt-2">Verify payments on pending requests, or apply VIP overrides.</p>
+        <p className="text-muted-foreground mt-2">Verify payments on pending requests, apply VIP overrides, or search history.</p>
       </div>
 
-      {/* Filter Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 text-slate-500">
-          <Filter className="w-4 h-4" />
-          <span className="text-sm font-bold uppercase tracking-widest">Filters</span>
+      {/* Filter & Search Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col items-start gap-4 lg:flex-row lg:items-center lg:justify-between">
+        
+        {/* GLOBAL SEARCH INPUT */}
+        <div className="relative w-full lg:w-80 shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search ID, name, venue, event..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] transition-all"
+          />
         </div>
         
-        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full lg:w-auto">
           
           {/* Venue Dropdown */}
-          <div className="relative w-full sm:w-auto">
+          <div className="relative w-full sm:w-auto shrink-0">
             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <select
               value={filterVenue}
@@ -284,8 +327,8 @@ export default function ManageBookings() {
             </select>
           </div>
 
-          {/* Specific Status Dropdown UPDATED */}
-          <div className="relative w-full sm:w-auto">
+          {/* Specific Status Dropdown */}
+          <div className="relative w-full sm:w-auto shrink-0">
             <Activity className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <select
               value={filterStatus}
@@ -304,10 +347,10 @@ export default function ManageBookings() {
           </div>
 
           {/* Ethiopian Calendar Popover */}
-          <div className="relative w-full sm:w-auto">
+          <div className="relative w-full sm:w-auto shrink-0">
             <div 
               onClick={() => setShowCalendar(!showCalendar)}
-              className="flex items-center gap-2 w-full sm:w-48 pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none hover:bg-slate-100 hover:border-emerald-200 transition-all cursor-pointer"
+              className="flex items-center gap-2 w-full sm:w-44 pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none hover:bg-slate-100 hover:border-emerald-200 transition-all cursor-pointer"
             >
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <span className="truncate">{filterDate ? toEthDateString(filterDate) : 'Any Date'}</span>
@@ -330,13 +373,13 @@ export default function ManageBookings() {
           </div>
 
           {/* Clear Filters Button */}
-          {(filterVenue !== 'all' || filterDate !== '' || filterStatus !== 'all') && (
+          {(filterVenue !== 'all' || filterDate !== '' || filterStatus !== 'all' || searchQuery !== '') && (
             <Button 
               variant="ghost" 
-              onClick={() => { setFilterVenue('all'); setFilterDate(''); setFilterStatus('all'); }}
-              className="w-full sm:w-auto text-rose-500 hover:text-rose-700 hover:bg-rose-50 font-bold px-3 h-10"
+              onClick={() => { setFilterVenue('all'); setFilterDate(''); setFilterStatus('all'); setSearchQuery(''); }}
+              className="w-full sm:w-auto text-rose-500 hover:text-rose-700 hover:bg-rose-50 font-bold px-3 h-10 shrink-0"
             >
-              <X className="w-4 h-4 mr-1.5" /> Clear
+              <X className="w-4 h-4 mr-1.5" /> Clear Filters
             </Button>
           )}
 
@@ -370,8 +413,8 @@ export default function ManageBookings() {
         {paginatedBookings.length === 0 ? (
            <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-16 text-center text-slate-500">
               <Calendar className="w-12 h-12 mx-auto text-slate-300 mb-4" />
-              <p className="font-bold">No bookings found for these filters.</p>
-              <p className="text-sm">Try clearing your filters or changing the status tab.</p>
+              <p className="font-bold">No bookings found.</p>
+              <p className="text-sm">Try clearing your search query or filters.</p>
            </div>
         ) : paginatedBookings.map((b, i) => {
 
@@ -388,6 +431,9 @@ export default function ManageBookings() {
 
           const startDate = b.start_date || b.startDate || '';
           const endDate = b.end_date || b.endDate || '';
+          const startTime = formatEthTime(b.start_time || b.startTime);
+          const endTime = formatEthTime(b.end_time || b.endTime);
+          
           const attachment = b.letter_attachment || b.letterAttachment || b.attachment;
 
           const venueId = b.venue || b.venueId;
@@ -425,7 +471,6 @@ export default function ManageBookings() {
 
           const isExpanded = expandedId === safeId;
           const isRejecting = rejectingId === safeId;
-          // Apply new fallback logic to ensure styles load correctly
           const statusLower = (b.status || '').toLowerCase();
           const style = statusStyles[statusLower] || statusStyles.pending;
 
@@ -468,6 +513,7 @@ export default function ManageBookings() {
                       </span>
                       <h3 className="text-lg font-bold text-slate-900 truncate group-hover:text-[#268053] transition-colors">{title}</h3>
                     </div>
+                    
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600 font-medium">
                       <div className="flex items-center gap-1.5 shrink-0"><MapPin className="w-4 h-4 text-slate-400" /><span>{venueName}</span></div>
 
@@ -477,6 +523,14 @@ export default function ManageBookings() {
                           {startDate === endDate
                             ? toEthDateString(startDate)
                             : `From ${toEthDateString(startDate).split(',')[0]} to ${toEthDateString(endDate)}`}
+                        </span>
+                      </div>
+
+                      {/* --- LOCAL TIME DISPLAY ADDED HERE --- */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span className="font-bold text-[#268053] bg-emerald-50 px-2 py-0.5 rounded">
+                          {startTime} - {endTime} Local
                         </span>
                       </div>
 
@@ -552,6 +606,17 @@ export default function ManageBookings() {
                       <div>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Organizer Details</p>
                         <div className="bg-slate-50 border border-slate-100 rounded-xl p-5 space-y-3">
+                          <div className="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-slate-200">
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ref ID</span>
+                             <span className="font-mono font-bold text-slate-600 bg-slate-200 px-2 py-0.5 rounded">MOA-BKG-{safeId}</span>
+                          </div>
+                          
+                          {/* ALSO ADDED TIME HERE FOR CLARITY */}
+                          <div className="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-slate-200">
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Schedule</span>
+                             <span className="font-bold text-[#268053] flex items-center gap-1.5"><Clock size={12}/> {startTime} to {endTime} (Local)</span>
+                          </div>
+
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-slate-400"><User size={16} /></div>
                             <span className="font-bold text-slate-800">{orgName}</span>
@@ -601,6 +666,23 @@ export default function ManageBookings() {
                           )}
                         </div>
                       </div>
+
+                      {/* Display custom schedule array if it exists */}
+                      {(b.daily_schedules || b.dailySchedules)?.length > 0 && (
+                        <div>
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Custom Schedule</p>
+                           <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+                              {(b.daily_schedules || b.dailySchedules).map((ds: any, dIdx: number) => (
+                                 <div key={dIdx} className="flex justify-between items-center text-xs font-bold bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                                    <span className="text-slate-700">{getEthDateString(ds.date)}</span>
+                                    <span className="text-[#268053] bg-emerald-50 px-2 py-0.5 rounded">
+                                       {ds.allDay ? 'Full Day' : `${formatEthTime(ds.startTime)} - ${formatEthTime(ds.endTime)} (Local)`}
+                                    </span>
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
+                      )}
 
                       {attachment && (
                         <div>
