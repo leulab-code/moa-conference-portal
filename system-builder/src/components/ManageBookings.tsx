@@ -297,22 +297,29 @@ export default function ManageBookings() {
         <p className="text-muted-foreground mt-2">Verify payments on pending requests, apply VIP overrides, or search history.</p>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col items-start gap-4 lg:flex-row lg:items-center lg:justify-between">
+      {/* NEW Filter & Search Bar Layout */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
         
-        {/* GLOBAL SEARCH INPUT */}
-        <div className="relative w-full lg:w-80 shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search ID, name, venue, event..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] transition-all"
-          />
+        {/* Left Side: Filter Label + Global Search Input */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
+          <div className="flex items-center gap-2 text-slate-500 shrink-0">
+            <Filter className="w-4 h-4" />
+            <span className="text-sm font-bold uppercase tracking-widest">Filters</span>
+          </div>
+          <div className="relative w-full sm:w-80 shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search ID, name, venue, event..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#268053]/20 focus:border-[#268053] transition-all"
+            />
+          </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full lg:w-auto">
+        {/* Right Side: Dropdowns */}
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full xl:w-auto">
           
           {/* Venue Dropdown */}
           <div className="relative w-full sm:w-auto shrink-0">
@@ -431,6 +438,8 @@ export default function ManageBookings() {
 
           const startDate = b.start_date || b.startDate || '';
           const endDate = b.end_date || b.endDate || '';
+          
+          // GET LOCAL TIME FOR MAIN DISPLAY
           const startTime = formatEthTime(b.start_time || b.startTime);
           const endTime = formatEthTime(b.end_time || b.endTime);
           
@@ -526,7 +535,7 @@ export default function ManageBookings() {
                         </span>
                       </div>
 
-                      {/* --- LOCAL TIME DISPLAY ADDED HERE --- */}
+                      {/* --- LOCAL TIME DISPLAY --- */}
                       <div className="flex items-center gap-1.5 shrink-0">
                         <Clock className="w-4 h-4 text-slate-400" />
                         <span className="font-bold text-[#268053] bg-emerald-50 px-2 py-0.5 rounded">
@@ -674,7 +683,7 @@ export default function ManageBookings() {
                            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col gap-2 max-h-32 overflow-y-auto custom-scrollbar">
                               {(b.daily_schedules || b.dailySchedules).map((ds: any, dIdx: number) => (
                                  <div key={dIdx} className="flex justify-between items-center text-xs font-bold bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
-                                    <span className="text-slate-700">{getEthDateString(ds.date)}</span>
+                                    <span className="text-slate-700">{toEthDateString(ds.date)}</span>
                                     <span className="text-[#268053] bg-emerald-50 px-2 py-0.5 rounded">
                                        {ds.allDay ? 'Full Day' : `${formatEthTime(ds.startTime)} - ${formatEthTime(ds.endTime)} (Local)`}
                                     </span>
