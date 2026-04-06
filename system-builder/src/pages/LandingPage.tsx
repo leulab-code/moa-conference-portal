@@ -44,16 +44,18 @@ const getFullEthDate = (gregStr: string) => {
   }
 };
 
-// Helper: 24h to strictly Ethiopian Local Time (6 hours difference)
-const formatEthTime = (timeStr: string) => {
+// --- ETHIOPIAN TIME CONVERTER (FIXED: Exact match, no 6-hour shift) ---
+const formatEthTime = (timeStr: string | undefined | null) => {
   if (!timeStr) return '';
   try {
-    const [hStr, m] = timeStr.split(':');
-    const h = parseInt(hStr, 10);
-    let ethHr = h >= 6 ? h - 6 : h + 6;
-    if (ethHr > 12) ethHr -= 12;
-    if (ethHr === 0) ethHr = 12;
-    return `${ethHr}:${m}`;
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    const h = parseInt(parts[0], 10);
+    const m = parts[1];
+    
+    if (isNaN(h)) return timeStr;
+
+    return `${h}:${m}`;
   } catch {
     return timeStr;
   }
@@ -99,7 +101,7 @@ function EventDetailsModal({ booking, venueName, onClose }: EventDetailsModalPro
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Time</p>
               <div className="flex items-center gap-2 text-slate-900 font-bold">
                 <Clock size={14} className="text-emerald-600" />
-                <span className="text-sm">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)} (Local-Time)</span>
+                <span className="text-sm">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)} (Local)</span>
               </div>
             </div>
           </div>
@@ -315,7 +317,8 @@ export default function LandingPage() {
 
         if (isAfter(now, startTime) && isBefore(now, endTime)) {
           return {
-            label: `Occupied until ${todayEndTime}`,
+            // FIXED: Formatting the time with local time correctly here
+            label: `Occupied until ${formatEthTime(todayEndTime)}`,
             color: 'bg-rose-500',
             textColor: 'text-rose-600',
             bgColor: 'bg-rose-50',
@@ -324,7 +327,8 @@ export default function LandingPage() {
         }
         if (isBefore(now, startTime)) {
           return {
-            label: `Booked today at ${todayStartTime}`,
+            // FIXED: Formatting the time with local time correctly here
+            label: `Booked today at ${formatEthTime(todayStartTime)}`,
             color: 'bg-emerald-500',
             textColor: 'text-emerald-700',
             bgColor: 'bg-emerald-50',
@@ -608,7 +612,6 @@ export default function LandingPage() {
 
                       <div className="mt-auto pt-6 border-t border-slate-50">
                         
-                        {/* --- FIXED: Hide Schedule entirely if it's a VIP Venue --- */}
                         <div className="flex flex-col mb-6">
                           <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Upcoming Schedule</span>
 
