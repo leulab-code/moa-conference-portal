@@ -36,7 +36,7 @@ const getServiceIcon = (name: string) => {
 };
 
 export default function CateringTasks() {
-  const { bookings, venues, supportServices, acknowledgeCateringTask } = useApp();
+  const { bookings, venues, supportServices, acknowledgeCateringTask, toggleSupportServiceAvailability } = useApp();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Filter ONLY bookings that have support services requested
@@ -130,22 +130,6 @@ export default function CateringTasks() {
                       </div>
                     </div>
 
-                    {/* Service Preview Pills */}
-                    <div className="hidden xl:flex flex-wrap gap-2 max-w-sm justify-end">
-                      {b.supportServices.slice(0, 3).map(id => {
-                        const s = supportServices.find(ss => ss.id === id);
-                        return s ? (
-                          <span key={id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 text-xs font-bold">
-                            {getServiceIcon(s.name)}
-                            {s.name}
-                          </span>
-                        ) : null;
-                      })}
-                      {b.supportServices.length > 3 && (
-                        <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100">+{b.supportServices.length - 3}</span>
-                      )}
-                    </div>
-
                     {/* Action Toggle */}
                     <div className="flex items-center gap-3">
                       <Button 
@@ -174,18 +158,50 @@ export default function CateringTasks() {
                       {/* Support Service Specs */}
                       <div>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block">Support Service Requirements</span>
-                        <div className="grid gap-3">
+                        <div className="grid gap-4">
                           {b.supportServices.map(id => {
                             const s = supportServices.find(ss => ss.id === id);
+                            const isUnavailable = (b.unavailableSupportServices || []).includes(id);
+
                             return s ? (
-                              <div key={id} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-4 shadow-sm group/item hover:border-amber-300 transition-colors">
+                              <div key={id} className={`flex items-center justify-between border rounded-2xl p-5 shadow-sm transition-all duration-300 ${
+                                isUnavailable ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200 hover:border-amber-300'
+                              }`}>
                                 <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100 group-hover/item:bg-amber-100 transition-colors">
+                                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-colors ${
+                                    isUnavailable ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-amber-50 text-amber-600 border-amber-100'
+                                  }`}>
                                     {getServiceIcon(s.name)}
                                   </div>
-                                  <span className="font-bold text-slate-800">{s.name}</span>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`font-bold transition-colors ${isUnavailable ? 'text-rose-900' : 'text-slate-800'}`}>
+                                        {s.name}
+                                      </span>
+                                      {isUnavailable && (
+                                        <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black uppercase tracking-widest animate-pulse">
+                                          Not Available
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isUnavailable ? 'text-rose-400' : 'text-slate-400'}`}>
+                                      {isUnavailable ? 'Resource Shortage' : 'Standard Delivery'}
+                                    </p>
+                                  </div>
                                 </div>
-                                <span className={`w-3 h-3 rounded-full ${isAck ? 'bg-emerald-400' : 'bg-amber-400'} shadow-sm`}></span>
+                                <div className="flex items-center gap-4">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); toggleSupportServiceAvailability(b.id, id); }}
+                                    className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest border transition-all ${
+                                      isUnavailable 
+                                        ? 'bg-rose-600 text-white border-transparent hover:bg-rose-700 shadow-sm' 
+                                        : 'bg-white text-slate-400 border-slate-200 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50'
+                                    }`}
+                                  >
+                                    {isUnavailable ? 'Set Available' : 'Set Unavailable'}
+                                  </button>
+                                  <span className={`w-3 h-3 rounded-full shadow-inner ${isAck ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                                </div>
                               </div>
                             ) : null;
                           })}

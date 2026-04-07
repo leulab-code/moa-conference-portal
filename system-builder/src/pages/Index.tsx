@@ -11,14 +11,18 @@ import Dashboard from '@/components/Dashboard';
 import UserManagement from '@/components/UserManagement';
 import VIPBookingForm from '@/components/VIPBookingForm';
 import ManageServices from '@/components/ManageServices';
-import VenueOperations from '@/components/VenueOperations'; // <-- Added this import!
+import VenueOperations from '@/components/VenueOperations'; 
 import EmailTemplateManager from '@/components/MessageCenter';
+import TechnicalTasks from '@/components/TechnicalTasks';
+import CateringTasks from '@/components/CateringTasks';
 
 function AppContent() {
   const { role, token } = useApp();
   
   const defaultPage = 
     !token ? 'vip-booking' : 
+    role === 'ict_admin' ? 'technical-tasks' :
+    role === 'catering_support' ? 'catering-tasks' :
     ['system_admin', 'event_management', 'admin_finance', 'leadership'].includes(role) ? 'dashboard' : 
     'calendar';
     
@@ -37,7 +41,7 @@ function AppContent() {
       const validPages = [
         'dashboard', 'calendar', 'venues', 'new-booking', 'vip-booking', 
         'my-bookings', 'manage-bookings', 'user-management', 'manage-services', 
-        'venue-operations' // <-- Added here
+        'venue-operations', 'technical-tasks', 'catering-tasks'
       ];
       
       if (validPages.includes(hash)) {
@@ -52,7 +56,7 @@ function AppContent() {
 
   const renderPage = () => {
     switch (page) {
-      case 'dashboard': return <Dashboard onNavigate={setPage} />;
+      case 'dashboard': return <Dashboard />;
       case 'calendar': return <CalendarView />;
       case 'venues': return <VenuesPage />;
       case 'new-booking': return <NewBookingForm onComplete={() => setPage('my-bookings')} />;
@@ -62,8 +66,10 @@ function AppContent() {
       case 'user-management': return <UserManagement />;
       case 'manage-services': return <ManageServices />;
       case 'venue-operations': return <VenueOperations />;
-      case 'message-center': return <EmailTemplateManager />; // <-- Added this case!
-      default: return !token ? <VIPBookingForm onComplete={() => setPage('my-bookings')} /> : <Dashboard onNavigate={setPage} />;
+      case 'message-center': return <EmailTemplateManager />;
+      case 'technical-tasks': return <TechnicalTasks />;
+      case 'catering-tasks': return <CateringTasks />;
+      default: return !token ? <VIPBookingForm onComplete={() => setPage('my-bookings')} /> : <Dashboard />;
     }
   };
 

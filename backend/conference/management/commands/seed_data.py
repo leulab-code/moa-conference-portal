@@ -7,7 +7,7 @@ class Command(BaseCommand):
     help = 'Seeds venues, services, official email templates, and a default admin'
 
     def handle(self, *args, **options):
-        # 1. CREATE DEFAULT ADMIN (Added this inside the handle method)
+        # 1. CREATE DEFAULT ADMIN
         self.stdout.write('Creating default admin...')
         admin_email = 'leulabetu@gmail.com' # Change this to your preferred login email
         
@@ -71,12 +71,19 @@ class Command(BaseCommand):
                 }
             )
 
-        # 5. SEED EMAIL TEMPLATES
+        # 5. SEED ALL NEW EMAIL TEMPLATES
         self.stdout.write('Seeding professional email templates...')
         templates = [
-            {'trigger': 'approved', 'subject': 'Reservation Approved', 'body': 'Dear {name}, your booking for {venue} on {date} is approved.'},
-            {'trigger': 'confirmed', 'subject': 'Reservation Confirmed', 'body': 'Dear {name}, your booking for {venue} is confirmed.'},
-            {'trigger': 'rejected', 'subject': 'Reservation Update', 'body': 'Dear {name}, your booking was rejected.'},
+            {'trigger': 'pending', 'subject': 'Request Received: {event}', 'body': 'Dear {name},\n\nWe have received your booking request for {event} at {venue} on {date}. Your reference ID is {ref}.\n\nYour request is currently pending administrative review. You will be notified once the status is updated.'},
+            {'trigger': 'partial_paid', 'subject': '1st Round Payment Confirmed: {event}', 'body': 'Dear {name},\n\nWe have successfully received your 1st round payment for {event} (Ref: {ref}). Your booking is now conditionally secured.\n\nPlease ensure the remaining balance is settled prior to the event.'},
+            {'trigger': 'paid', 'subject': 'Booking Confirmed (Fully Paid): {event}', 'body': 'Dear {name},\n\nThank you for your full payment. Your booking for {event} at {venue} on {date} is now officially confirmed. We look forward to hosting you.'},
+            {'trigger': 'approved', 'subject': 'VIP Booking Approved: {event}', 'body': 'Dear {name},\n\nYour VIP priority booking request for {event} at {venue} on {date} has been approved. This time slot is securely reserved for your event.'},
+            {'trigger': 'rejected', 'subject': 'Booking Request Rejected: {event}', 'body': 'Dear {name},\n\nWe regret to inform you that your booking request for {event} could not be accommodated. This time slot may have been overridden by a high-priority state event or there is a scheduling conflict.\n\nReason Provided: {reason}\n\nWe apologize for the inconvenience.'},
+            {'trigger': 'cancelled', 'subject': 'Booking Cancelled: {event}', 'body': 'Dear {name},\n\nYour booking for {event} (Ref: {ref}) has been successfully cancelled as per the latest system update.'},
+            {'trigger': 'completed', 'subject': 'Thank You: {event} Concluded', 'body': 'Dear {name},\n\nYour event "{event}" at {venue} has successfully concluded. Thank you for choosing the Ministry of Agriculture Conference Center.\n\nWe hope the facility and services met your highest expectations. We look forward to hosting you again.'},
+            {'trigger': 'reminder_24h', 'subject': 'Reminder: Your Event Starts Tomorrow!', 'body': 'Dear {name},\n\nThis is a friendly reminder that your event "{event}" at {venue} is scheduled to begin tomorrow. Please ensure all preparations are in place.'},
+            {'trigger': 'reminder_48h_pay', 'subject': 'Action Required: Pending Payment for {event}', 'body': 'Dear {name},\n\nYour booking for {event} (Ref: {ref}) is currently pending payment. Please note that unconfirmed bookings may be automatically released or overridden. Kindly complete your payment to secure the venue.'},
+            {'trigger': 'last_day', 'subject': 'Event Conclusion: {event}', 'body': 'Dear {name},\n\nToday marks the conclusion of your scheduled event "{event}". We kindly remind you to ensure all personal belongings and external equipment are cleared from the venue. Thank you.'},
         ]
 
         for t in templates:
@@ -85,4 +92,4 @@ class Command(BaseCommand):
                 defaults={'subject': t['subject'], 'body': t['body']}
             )
 
-        self.stdout.write(self.style.SUCCESS('Successfully seeded all Ministerial data and Admin user!'))
+        self.stdout.write(self.style.SUCCESS('Successfully seeded all Ministerial data, Email Templates, and Admin user!'))

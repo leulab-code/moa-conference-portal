@@ -94,9 +94,9 @@ class LoginView(APIView):
             sp = user.system_profile
             user_data = {
                 'id':         sp.id,
-                'name':        sp.name,
-                'email':       sp.email,
-                'role':        sp.role,
+                'name':       sp.name,
+                'email':      sp.email,
+                'role':       sp.role,
                 'created_at': sp.created_at.isoformat() if sp.created_at else None,
             }
         except SystemUser.DoesNotExist:
@@ -118,9 +118,9 @@ class MeView(APIView):
             sp = request.user.system_profile
             return Response({
                 'id':         sp.id,
-                'name':        sp.name,
-                'email':       sp.email,
-                'role':        sp.role,
+                'name':       sp.name,
+                'email':      sp.email,
+                'role':       sp.role,
                 'created_at': sp.created_at.isoformat() if sp.created_at else None,
             })
         except SystemUser.DoesNotExist:
@@ -222,15 +222,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             self._trigger_email(booking, new_status)
 
     def _trigger_email(self, booking, status):
-        """Internal helper to send emails based on status"""
-        if status == 'received':
-            send_automated_email(booking, 'received')
-        elif status == 'approved':
-            send_automated_email(booking, 'approved')
-        elif status == 'confirmed':
-            send_automated_email(booking, 'confirmed')
-        elif status == 'rejected':
-            send_automated_email(booking, 'rejected')
+        valid_triggers = ['pending', 'partial_paid', 'paid', 'approved', 'rejected', 'cancelled', 'completed']
+        if status in valid_triggers:
+            send_automated_email(booking, status)
 
     def get_permissions(self):
         if self.action in ['create', 'track', 'public_cancel', 'public_edit']:
@@ -241,7 +235,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         is_public = self.request.query_params.get('public', 'false').lower() == 'true'
         if is_public:
-            return qs.filter(status__in=['confirmed', 'reserved', 'approved', 'override'])
+            return qs.filter(status__in=['pending', 'partial_paid', 'paid', 'approved'])
 
         user = self.request.user
         if user.is_authenticated:
@@ -249,14 +243,14 @@ class BookingViewSet(viewsets.ModelViewSet):
             if role in ('system_admin', 'event_management', 'admin_finance', 'leadership'):
                 return qs
 
-            scheduled_q = Q(status__in=['confirmed', 'reserved', 'approved', 'override'])
+            scheduled_q = Q(status__in=['pending', 'partial_paid', 'paid', 'approved'])
 
             if role == 'organizer':
                 qs = qs.filter(Q(user=user) | scheduled_q).distinct()
             elif role == 'ict_admin':
-                qs = qs.filter(Q(technical_services__isnull=False) | scheduled_q).distinct()
+                qs = qs.filter(technical_services__isnull=False).distinct()
             elif role == 'catering_support':
-                qs = qs.filter(Q(support_services__isnull=False) | scheduled_q).distinct()
+                qs = qs.filter(support_services__isnull=False).distinct()
         else:
             return qs.none()
 
@@ -283,15 +277,16 @@ class BookingViewSet(viewsets.ModelViewSet):
         else:
             booking = serializer.save(user=None)
 
-        if booking.status == 'override':
+        if booking.status == 'approved':
             self._handle_vip_clashes(booking)
             
-        self._trigger_email(booking, 'received')
+        self._trigger_email(booking, 'pending')
 
     def _handle_vip_clashes(self, booking):
+        # Override handles clashes by rejecting existing active bookings
         clashes = Booking.objects.filter(
             venue=booking.venue,
-            status__in=['reserved', 'approved', 'confirmed', 'override'],
+            status__in=['pending', 'partial_paid', 'paid', 'approved'],
             start_date__lte=booking.end_date,
             end_date__gte=booking.start_date,
         ).exclude(pk=booking.pk)
@@ -304,9 +299,10 @@ class BookingViewSet(viewsets.ModelViewSet):
             )
             
         for clash in clashes:
-            clash.status = 'cancelled'
-            clash.rejection_reason = 'Automatically cancelled. This slot was overridden by an emergency VIP/State requirement.'
+            clash.status = 'rejected'
+            clash.rejection_reason = 'Automatically rejected. This slot was overridden by a high-priority VIP/State requirement.'
             clash.save()
+            self._trigger_email(clash, 'rejected')
 
     @action(detail=True, methods=['patch'], url_path='update_status', permission_classes=[IsEventManagementOrAdmin])
     def update_status(self, request, pk=None):
@@ -323,7 +319,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         if new_status == 'rejected' and not rejection_reason: 
             return Response({'rejection_reason': 'A reason is required when rejecting.'}, status=400)
 
-        if new_status == 'override':
+        # Trigger destruction of other events if VIP Override is triggered
+        if new_status == 'approved':
             self._handle_vip_clashes(booking)
 
         booking.status = new_status
@@ -343,10 +340,9 @@ class BookingViewSet(viewsets.ModelViewSet):
         if role == 'organizer' and booking.user != request.user:
             raise PermissionDenied('You can only cancel your own bookings.')
 
-        if booking.status not in ('reserved', 'confirmed', 'approved', 'override'):
+        if booking.status not in ('pending', 'partial_paid', 'paid', 'approved'):
             return Response({'error': 'Only active bookings can be cancelled.'}, status=400)
 
-        # Removed the broken Gregorian math. Frontend handles the lock.
         booking.status = 'cancelled'
         booking.save()
         return Response(BookingSerializer(booking, context={'request': request}).data)
@@ -369,10 +365,9 @@ class BookingViewSet(viewsets.ModelViewSet):
             ref_id = str(ref_id).replace('MOA-BKG-', '')
         try:
             booking = Booking.objects.get(id=ref_id)
-            if booking.status not in ('reserved', 'confirmed', 'approved'):
-                return Response({'error': 'Only pending or confirmed bookings can be cancelled.'}, status=400)
+            if booking.status not in ('pending', 'partial_paid', 'paid', 'approved'):
+                return Response({'error': 'Only active bookings can be cancelled.'}, status=400)
             
-            # Removed the broken Gregorian math. Frontend handles the lock.
             booking.status = 'cancelled'
             booking.save()
             return Response(BookingSerializer(booking, context={'request': request}).data)
@@ -389,7 +384,6 @@ class BookingViewSet(viewsets.ModelViewSet):
             if booking.status in ('cancelled', 'completed', 'rejected'):
                 return Response({'error': 'Cannot edit this booking status.'}, status=400)
             
-            # Removed the broken Gregorian math. Frontend handles the lock.
             booking.event_title = request.data.get('event_title', booking.event_title)
             booking.event_description = request.data.get('event_description', booking.event_description)
             booking.organizer_phone = request.data.get('organizer_phone', booking.organizer_phone)
@@ -402,6 +396,42 @@ class BookingViewSet(viewsets.ModelViewSet):
             return Response(BookingSerializer(booking, context={'request': request}).data)
         except (Booking.DoesNotExist, ValueError):
             return Response({'error': 'Booking not found.'}, status=404)
+
+    @action(detail=True, methods=['patch'], url_path='acknowledge_ict', permission_classes=[IsICTOrAdmin])
+    def acknowledge_ict(self, request, pk=None):
+        booking = self.get_object()
+        booking.ict_acknowledged = request.data.get('ict_acknowledged', True)
+        if booking.ict_acknowledged:
+            booking.ict_rejected = False
+            booking.ict_rejection_reason = ""
+        booking.save()
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='set_unavailable_services', permission_classes=[IsICTOrAdmin])
+    def set_unavailable_services(self, request, pk=None):
+        booking = self.get_object()
+        services_ids = request.data.get('unavailable_technical_services', [])
+        services = TechnicalService.objects.filter(id__in=services_ids)
+        booking.unavailable_technical_services.set(services)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='set_unavailable_support_services', permission_classes=[IsCateringOrAdmin])
+    def set_unavailable_support_services(self, request, pk=None):
+        booking = self.get_object()
+        services_ids = request.data.get('unavailable_support_services', [])
+        services = SupportService.objects.filter(id__in=services_ids)
+        booking.unavailable_support_services.set(services)
+        return Response(BookingSerializer(booking, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='acknowledge_catering', permission_classes=[IsCateringOrAdmin])
+    def acknowledge_catering(self, request, pk=None):
+        booking = self.get_object()
+        booking.catering_acknowledged = request.data.get('catering_acknowledged', True)
+        if booking.catering_acknowledged:
+            booking.catering_rejected = False
+            booking.catering_rejection_reason = ""
+        booking.save()
+        return Response(BookingSerializer(booking, context={'request': request}).data)
 
 class SystemUserViewSet(viewsets.ModelViewSet):
     queryset           = SystemUser.objects.select_related('user').all()

@@ -1,136 +1,194 @@
-import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { EthDateTime } from "ethiopian-calendar-date-converter";
-import { isSameDay, isBefore, isWithinInterval } from "date-fns";
+import { useState } from 'react';
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { EthDateTime } from 'ethiopian-calendar-date-converter';
 
-export const ETH_MONTHS = ["Meskerem", "Tikimt", "Hidar", "Tahsas", "Tir", "Yakatit", "Magabit", "Miyazya", "Ginbot", "Sene", "Hamle", "Nehasse", "Pagume"];
-const ETH_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const ETH_MONTHS = [
+  'Meskerem', 'Tikimt', 'Hidar', 'Tahsas', 'Tir', 'Yekatit',
+  'Megabit', 'Miazia', 'Genbot', 'Sene', 'Hamle', 'Nehase', 'Pagume'
+];
 
-interface EthiopianCalendarProps {
+interface CalendarProps {
   selected?: { from?: Date; to?: Date };
   onSelect?: (range: { from?: Date; to?: Date }) => void;
   bookedDates?: Date[];
-  pendingDates?: Date[]; // <-- ADDED THIS!
-  disabled?: (date: Date) => boolean;
+  pendingDates?: Date[];
+  [key: string]: any; 
 }
 
-export function EthiopianCalendar({ 
-  selected, 
-  onSelect, 
-  bookedDates = [], 
-  pendingDates = [], // <-- ADDED THIS!
-  disabled 
-}: EthiopianCalendarProps) {
-  const today = EthDateTime.now();
-  const [view, setView] = useState({ year: today.year, month: today.month });
+export function EthiopianCalendar({ selected, onSelect, bookedDates = [], pendingDates = [] }: CalendarProps) {
   
-  const prevMonth = () => setView(v => v.month === 1 ? { year: v.year - 1, month: 13 } : { ...v, month: v.month - 1 });
-  const nextMonth = () => setView(v => v.month === 13 ? { year: v.year + 1, month: 1 } : { ...v, month: v.month + 1 });
+  // FIX: Using 12:00 PM (Noon) prevents timezone offsets from shifting dates to "yesterday"
+  const [viewAnchor, setViewAnchor] = useState(() => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0); 
+    return d;
+  });
 
-  // Ethiopian months are 30 days, except Pagume (5 days, or 6 in leap years)
-  const daysInMonth = view.month === 13 ? (view.year % 4 === 3 ? 6 : 5) : 30;
-  
-  // Calculate which day of the week the month starts on to offset the grid
-  const firstDayGreg = new EthDateTime(view.year, view.month, 1, 0, 0, 0).toEuropeanDate();
-  const startOffset = firstDayGreg.getDay() === 0 ? 6 : firstDayGreg.getDay() - 1;
+  const anchorEth = EthDateTime.fromEuropeanDate(viewAnchor);
+  const viewEthYear = anchorEth.year;
+  const viewEthMonth = anchorEth.month;
 
-  const renderDays = () => {
-    const blanks = Array.from({ length: startOffset }, (_, i) => <div key={`blank-${i}`} className="w-9 h-9" />);
-    
-    const days = Array.from({ length: daysInMonth }, (_, i) => {
-      const day = i + 1;
-      const gregDate = new EthDateTime(view.year, view.month, day, 0, 0, 0).toEuropeanDate();
-      
-      // Set hours to exactly noon (12:00) so timezone shifts NEVER push it to the previous day
-      gregDate.setHours(12, 0, 0, 0);
-      
-      const isDisabled = disabled ? disabled(gregDate) : false;
-      const isBooked = bookedDates.some(b => isSameDay(new Date(b), gregDate));
-      
-      // NEW: Check if the date is pending (awaiting payment)
-      const isPending = pendingDates.some(p => isSameDay(new Date(p), gregDate));
-      
-      const isSelectedFrom = selected?.from && isSameDay(selected.from, gregDate);
-      const isSelectedTo = selected?.to && isSameDay(selected.to, gregDate);
-      const isBetween = selected?.from && selected?.to && isWithinInterval(gregDate, { start: selected.from, end: selected.to });
-      
-      let className = "w-9 h-9 flex items-center justify-center text-sm rounded-md transition-all box-border ";
-      
-      if (isBooked) {
-        className += "bg-red-100 text-red-600 font-bold line-through cursor-not-allowed";
-      } else if (isDisabled) {
-        className += "text-slate-300 cursor-not-allowed";
-      } else if (isSelectedFrom || isSelectedTo) {
-        className += "bg-[#268053] text-white font-bold cursor-pointer shadow-md";
-      } else if (isBetween) {
-        className += "bg-emerald-50 text-emerald-900 cursor-pointer";
-      } else if (isPending) {
-        // BEAUTIFUL DASHED GREY FOR PENDING DATES (Still clickable!)
-        className += "bg-slate-50 text-slate-500 border-2 border-dashed border-slate-300 hover:bg-slate-200 hover:border-slate-400 cursor-pointer font-bold";
-      } else {
-        className += "hover:bg-slate-100 cursor-pointer text-slate-700";
-      }
+  // Ethiopian leap years happen when year % 4 === 3 (e.g. 2015, 2019)
+  const isLeapYear = viewEthYear % 4 === 3;
+  const daysInMonth = viewEthMonth === 13 ? (isLeapYear ? 6 : 5) : 30;
 
-      return (
-        <div 
-          key={day} 
-          className={className}
-          onClick={() => {
-             // We block clicks on 'isBooked', but we ALLOW clicks on 'isPending' so the user can snatch it!
-             if (isBooked || isDisabled) return;
-             if (!selected?.from || (selected?.from && selected?.to)) {
-                onSelect?.({ from: gregDate, to: undefined });
-             } else {
-                if (isBefore(gregDate, selected.from)) {
-                   onSelect?.({ from: gregDate, to: selected.from });
-                } else {
-                   onSelect?.({ from: selected.from, to: gregDate });
-                }
-             }
-          }}
-        >
-          {day}
-        </div>
-      );
-    });
+  const firstDayGC = new Date(viewAnchor);
+  firstDayGC.setDate(firstDayGC.getDate() - (anchorEth.date - 1));
+  firstDayGC.setHours(12, 0, 0, 0); // Keep at noon
 
-    return [...blanks, ...days];
+  const nextMonth = () => {
+    const next = new Date(firstDayGC);
+    next.setDate(next.getDate() + daysInMonth); 
+    next.setHours(12, 0, 0, 0);
+    setViewAnchor(next);
   };
 
+  const prevMonth = () => {
+    const prev = new Date(firstDayGC);
+    prev.setDate(prev.getDate() - 1); 
+    prev.setHours(12, 0, 0, 0);
+    setViewAnchor(prev);
+  };
+
+  const isSameDay = (d1: Date, d2: Date) => {
+    return d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
+  };
+
+  const isSelected = (date: Date) => {
+    if (!selected?.from && !selected?.to) return false;
+    if (selected.from && isSameDay(date, selected.from)) return true;
+    if (selected.to && isSameDay(date, selected.to)) return true;
+    if (selected.from && selected.to && date > selected.from && date < selected.to) return true;
+    return false;
+  };
+
+  const isBooked = (date: Date) => bookedDates.some(d => isSameDay(d, date));
+  const isPending = (date: Date) => pendingDates.some(d => isSameDay(d, date));
+
+  const isPast = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+  };
+  
+  const isToday = (date: Date) => isSameDay(new Date(), date);
+
+  const handleDateClick = (date: Date) => {
+    if (isBooked(date) || isPast(date)) return; 
+
+    if (!selected?.from || (selected.from && selected.to)) {
+      onSelect?.({ from: date, to: undefined });
+    } else {
+      if (date < selected.from) {
+        onSelect?.({ from: date, to: selected.from });
+      } else {
+        onSelect?.({ from: selected.from, to: date });
+      }
+    }
+  };
+
+  const renderDays = () => {
+    const firstDayOfWeek = firstDayGC.getDay(); 
+    const days = [];
+
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      days.push(<div key={`empty-${i}`} className="h-10 w-10"></div>);
+    }
+
+    for (let i = 0; i < daysInMonth; i++) {
+      const currentGCDate = new Date(firstDayGC);
+      currentGCDate.setDate(firstDayGC.getDate() + i);
+      currentGCDate.setHours(12, 0, 0, 0); // Keep at noon
+
+      const ethDayNumber = i + 1;
+      const selectedState = isSelected(currentGCDate);
+      const booked = isBooked(currentGCDate);
+      const pending = isPending(currentGCDate);
+      const past = isPast(currentGCDate);
+      const today = isToday(currentGCDate);
+
+      let className = "h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium transition-all relative ";
+
+      if (booked) {
+        className += "bg-red-50 text-red-300 cursor-not-allowed line-through decoration-red-300";
+      } else if (past) {
+        className += "bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-60";
+      } else if (selectedState) {
+        className += "bg-[#268053] text-white shadow-md transform scale-110 z-10 font-bold";
+      } else if (today) {
+        className += "bg-emerald-100 text-emerald-900 font-black ring-2 ring-emerald-400 cursor-pointer hover:bg-emerald-200 shadow-sm";
+      } else if (pending) {
+        className += "bg-amber-100 text-amber-700 cursor-pointer hover:bg-amber-200 border border-amber-200";
+      } else {
+        className += "text-slate-700 hover:bg-emerald-50 cursor-pointer";
+      }
+
+      days.push(
+        <div
+          key={`day-${ethDayNumber}`}
+          onClick={() => handleDateClick(currentGCDate)}
+          className={className}
+          title={currentGCDate.toDateString()}
+        >
+          {ethDayNumber}
+          {selectedState && <Check className="absolute -top-1 -right-1 w-3 h-3 bg-white text-[#268053] rounded-full p-0.5 shadow-sm" />}
+        </div>
+      );
+    }
+    return days;
+  };
+
+  const ethMonthName = ETH_MONTHS[viewEthMonth - 1] || 'Loading';
+
   return (
-    <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-100 w-fit select-none">
-       <div className="flex items-center justify-between mb-6">
-         <button onClick={prevMonth} type="button" className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
-           <ChevronLeft className="w-5 h-5 text-slate-600" />
-         </button>
-         
-         <div className="font-black text-[15px] text-slate-800 tracking-tight">
-           {ETH_MONTHS[view.month - 1]} {view.year}
-         </div>
+    <div className="w-80 select-none">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 px-2">
+        <button
+          onClick={prevMonth}
+          className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-slate-800"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <div className="text-center">
+          <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest">{ethMonthName}</h2>
+          <p className="text-xs font-bold text-[#268053]">
+            {viewEthYear} E.C. <span className="text-slate-400 mx-1">•</span> {firstDayGC.toLocaleString('default', { month: 'short', year: 'numeric' })} G.C.
+          </p>
+        </div>
+        <button
+          onClick={nextMonth}
+          className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-slate-800"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
 
-         <button onClick={nextMonth} type="button" className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
-           <ChevronRight className="w-5 h-5 text-slate-600" />
-         </button>
-       </div>
-       <div className="grid grid-cols-7 gap-1.5 mb-3 text-center">
-         {ETH_DAYS.map(d => <div key={d} className="w-9 text-[10px] font-black text-slate-400 uppercase tracking-widest">{d}</div>)}
-       </div>
-       <div className="grid grid-cols-7 gap-1.5">
-         {renderDays()}
-       </div>
+      {/* Weekdays */}
+      <div className="grid grid-cols-7 gap-1 mb-2 text-center">
+        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+          <div key={day} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {day}
+          </div>
+        ))}
+      </div>
 
-       {/* NEW: Handy legend at the bottom so users know what the colors mean! */}
-       <div className="mt-5 pt-4 border-t border-slate-100 flex flex-wrap justify-center gap-4 text-[9px] font-black uppercase tracking-widest text-slate-400">
-         <div className="flex items-center gap-1.5">
-           <div className="w-3 h-3 rounded-[3px] bg-red-100 border border-red-200"></div> Paid
-         </div>
-         <div className="flex items-center gap-1.5">
-           <div className="w-3 h-3 rounded-[3px] bg-slate-50 border-2 border-dashed border-slate-300"></div> Pending
-         </div>
-         <div className="flex items-center gap-1.5">
-           <div className="w-3 h-3 rounded-[3px] bg-[#268053]"></div> Selected
-         </div>
-       </div>
+      {/* Days */}
+      <div className="grid grid-cols-7 gap-1 place-items-center">
+        {renderDays()}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-6 flex flex-wrap justify-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-500 border-t border-slate-100 pt-4">
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-100 ring-1 ring-emerald-500"></div> Today</div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#268053]"></div> Selected</div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-100 border border-amber-200"></div> Pending</div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-100"></div> Paid/VIP</div>
+      </div>
     </div>
   );
 }

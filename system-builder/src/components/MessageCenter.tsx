@@ -4,17 +4,30 @@ import {
   Mail, Save, Info, Terminal, BellRing, History, 
   CheckCircle2, Clock, AlertTriangle, Send 
 } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+
+// Make triggers look professional in the UI
+const triggerLabels: Record<string, string> = {
+  pending: 'Booking Received',
+  partial_paid: '1st Round Paid',
+  paid: 'Fully Paid (Confirmed)',
+  approved: 'VIP Approved',
+  rejected: 'Rejected / Overridden',
+  cancelled: 'Cancelled',
+  completed: 'Event Completed',
+  reminder_24h: '24h Reminder',
+  reminder_48h_pay: 'Payment Expiration Warning',
+  last_day: 'Event Conclusion'
+};
 
 export default function MessageCenter() {
   const { token } = useApp();
-  const [templates, setTemplates] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Only fetch if token is available
     if (token) {
       fetchTemplates();
     } else {
@@ -35,20 +48,17 @@ export default function MessageCenter() {
 
       const data = await res.json();
       
-      // Handle Django paginated results (results: []) or direct arrays
       const templateList = Array.isArray(data) ? data : (data.results || []);
       
       setTemplates(templateList);
       
-      // Auto-select the first one if it exists
-      if (templateList.length > 0) {
+      if (templateList.length > 0 && !selected) {
         setSelected(templateList[0]);
       }
     } catch (err) {
       console.error("Comm Engine Error:", err);
       toast.error("Failed to sync with Communication Engine");
     } finally {
-      // THIS IS THE FIX: Always stop loading regardless of success or failure
       setLoading(false);
     }
   };
@@ -71,7 +81,7 @@ export default function MessageCenter() {
       
       if (res.ok) {
         toast.success("Official Protocol Updated");
-        fetchTemplates(); // Refresh to ensure sync
+        fetchTemplates();
       } else {
         throw new Error("Update failed");
       }
@@ -126,7 +136,7 @@ export default function MessageCenter() {
               >
                 <div className="relative z-10">
                   <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${selected?.id === t.id ? 'text-[#268053]' : 'text-slate-400'}`}>
-                    {t.trigger?.replace('_', ' ')}
+                    {triggerLabels[t.trigger] || t.trigger?.replace('_', ' ')}
                   </p>
                   <p className="text-sm font-bold text-slate-700 truncate">{t.subject}</p>
                 </div>
@@ -164,7 +174,9 @@ export default function MessageCenter() {
                       </div>
                       <div>
                         <h3 className="text-xl font-black text-slate-900">Edit Notification Protocol</h3>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Trigger: {selected.trigger}</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                          Trigger: {triggerLabels[selected.trigger] || selected.trigger}
+                        </p>
                       </div>
                    </div>
                    <Button onClick={handleSave} className="bg-[#268053] hover:bg-[#1b4332] text-white font-black px-8 py-6 rounded-xl transition-all active:scale-95">
@@ -199,7 +211,7 @@ export default function MessageCenter() {
                       <div>
                         <p className="text-[11px] font-black text-emerald-800 uppercase tracking-wider mb-1">Placeholders</p>
                         <p className="text-[10px] text-emerald-700 leading-relaxed font-medium italic">
-                          {"{name}, {venue}, {date}, {ref}"}
+                          {"{name}, {event}, {venue}, {date}, {ref}, {reason}"}
                         </p>
                       </div>
                     </div>
