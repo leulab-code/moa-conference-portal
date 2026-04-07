@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight, ChevronLeft, ChevronRight, Building, CheckCircle2, Building2, Users,
   X, Calendar as CalendarIcon, Clock, User, Mail, Phone, Info, Tag, CalendarCheck, AlertTriangle,
-  MapPin, Send, ShieldCheck, ArrowUpRight, Globe, Crown
+  MapPin, Send, ShieldCheck, ArrowUpRight, Globe, Crown, Menu
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, API_BASE, mapBooking } from '@/lib/app-context';
@@ -80,49 +80,50 @@ interface EventDetailsModalProps {
 
 function EventDetailsModal({ booking, venueName, onClose }: EventDetailsModalProps) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 border border-slate-100 flex flex-col">
-        <div className="relative h-32 shrink-0 bg-gradient-to-r from-emerald-600 to-emerald-800 p-8 flex items-end">
-          <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
+      {/* MOBILE RESPONSIVE MODAL WRAPPER */}
+      <div className="bg-white w-[95%] max-w-xl rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 border border-slate-100 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="relative h-24 sm:h-32 shrink-0 bg-gradient-to-r from-emerald-600 to-emerald-800 p-6 sm:p-8 flex items-end">
+          <button onClick={onClose} className="absolute top-4 right-4 sm:top-6 sm:right-6 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all">
             <X size={20} />
           </button>
-          <h2 className="text-2xl font-black text-white uppercase tracking-tight truncate">{booking.eventTitle}</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight truncate pr-10">{booking.eventTitle}</h2>
         </div>
-        <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh] custom-scrollbar">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="p-4 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ethiopian Date</p>
               <div className="flex items-center gap-2 text-slate-900 font-bold">
-                <CalendarIcon size={14} className="text-emerald-600" />
-                <span className="text-sm">{getEthDateString(booking.startDate)}</span>
+                <CalendarIcon size={14} className="text-emerald-600 shrink-0" />
+                <span className="text-xs sm:text-sm truncate">{getEthDateString(booking.startDate)}</span>
               </div>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Time</p>
               <div className="flex items-center gap-2 text-slate-900 font-bold">
-                <Clock size={14} className="text-emerald-600" />
-                <span className="text-sm">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)} (Local)</span>
+                <Clock size={14} className="text-emerald-600 shrink-0" />
+                <span className="text-xs sm:text-sm truncate">{formatEthTime(booking.startTime)} - {formatEthTime(booking.endTime)} (Local)</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 flex items-start gap-4">
+          <div className="bg-emerald-50/50 p-4 sm:p-5 rounded-2xl border border-emerald-100 flex items-start gap-4">
             <Building2 size={20} className="text-emerald-600 shrink-0 mt-1" />
-            <div>
+            <div className="min-w-0">
               <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Facility Name</p>
-              <p className="text-base font-black text-slate-900 leading-tight uppercase">{venueName}</p>
+              <p className="text-sm sm:text-base font-black text-slate-900 leading-tight uppercase truncate">{venueName}</p>
             </div>
           </div>
 
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Event Summary</p>
-            <p className="text-sm font-medium text-slate-600 leading-relaxed bg-slate-50 p-5 rounded-2xl italic border border-slate-100">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Event Summary</p>
+            <p className="text-xs sm:text-sm font-medium text-slate-600 leading-relaxed bg-slate-50 p-4 sm:p-5 rounded-2xl italic border border-slate-100">
               "{booking.eventDescription || 'No detailed description provided for this session.'}"
             </p>
           </div>
         </div>
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-center">
-          <button onClick={onClose} className="px-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-slate-100 transition-all uppercase tracking-widest">
+        <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-100 flex justify-center shrink-0">
+          <button onClick={onClose} className="w-full sm:w-auto px-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-slate-100 transition-all uppercase tracking-widest">
             Close Briefing
           </button>
         </div>
@@ -218,11 +219,11 @@ function ScheduleCarousel({ bookings, onSelect }: ScheduleCarouselProps) {
                   onClick={() => onSelect(b)}
                   className="w-full flex items-center justify-between bg-slate-50/50 px-3 py-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-all active:scale-[0.98] group/item"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-700 group-hover/item:text-emerald-700">{getFullEthDate(b.startDate)}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-bold text-slate-700 group-hover/item:text-emerald-700 truncate">{getFullEthDate(b.startDate)}</span>
                   </div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight group-hover/item:text-emerald-600 flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] ${isConfirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight group-hover/item:text-emerald-600 flex items-center gap-1.5 shrink-0">
+                    <span className={`hidden sm:inline-block px-1.5 py-0.5 rounded text-[8px] ${isConfirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {isConfirmed ? 'Confirmed' : 'Pending'}
                     </span>
                     {formatEthTime(b.startTime)} - {formatEthTime(b.endTime)}
@@ -265,6 +266,9 @@ export default function LandingPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
+  
+  // MOBILE MENU STATE
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isPrivilegedUser = ['leadership', 'system_admin', 'event_management'].includes(role || '');
 
@@ -317,7 +321,6 @@ export default function LandingPage() {
 
         if (isAfter(now, startTime) && isBefore(now, endTime)) {
           return {
-            // FIXED: Formatting the time with local time correctly here
             label: `Occupied until ${formatEthTime(todayEndTime)}`,
             color: 'bg-rose-500',
             textColor: 'text-rose-600',
@@ -327,7 +330,6 @@ export default function LandingPage() {
         }
         if (isBefore(now, startTime)) {
           return {
-            // FIXED: Formatting the time with local time correctly here
             label: `Booked today at ${formatEthTime(todayStartTime)}`,
             color: 'bg-emerald-500',
             textColor: 'text-emerald-700',
@@ -405,27 +407,28 @@ export default function LandingPage() {
         />
       )}
 
-      {/* Top Navigation Bar */}
+      {/* Top Navigation Bar - NOW FULLY RESPONSIVE */}
       <nav 
         className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 animate-[slide-down_0.8s_cubic-bezier(0.16,1,0.3,1)] ${
           isScrolled 
-            ? 'bg-white/95 backdrop-blur-md py-3 shadow-lg border-b border-slate-200 px-6 lg:px-12 xl:px-20' 
-            : 'bg-white border-b border-slate-100 py-5 px-6 lg:px-12 xl:px-20'
+            ? 'bg-white/95 backdrop-blur-md py-3 shadow-lg border-b border-slate-200 px-4 sm:px-6 lg:px-12 xl:px-20' 
+            : 'bg-white border-b border-slate-100 py-4 sm:py-5 px-4 sm:px-6 lg:px-12 xl:px-20'
         }`}
       >
         <div className="max-w-[1600px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-10">
-            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-              <div className="w-12 h-12 flex items-center justify-center shrink-0">
+          <div className="flex items-center gap-4 sm:gap-10">
+            <div className="flex items-center gap-2 sm:gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center shrink-0">
                 <img src={moaLogo} alt="MoA Logo" className="w-full h-full object-contain" />
               </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-serif font-bold text-[#111827] leading-none mb-1.5 tracking-tight">MoA Conference Center</h1>
-                <p className="text-[11px] font-medium text-slate-500 leading-none uppercase tracking-wide">Booking Management System</p>
+              <div>
+                <h1 className="text-lg sm:text-xl font-serif font-bold text-[#111827] leading-none mb-1 sm:mb-1.5 tracking-tight">MoA Conference</h1>
+                <p className="text-[9px] sm:text-[11px] font-medium text-slate-500 leading-none uppercase tracking-wide hidden sm:block">Booking Management System</p>
               </div>
             </div>
           </div>
 
+          {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center gap-10">
             <a href="#/venues" onClick={(e) => { e.preventDefault(); navigate('/app#/venues'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Venues</a>
             <a href="/book" onClick={(e) => { e.preventDefault(); navigate('/book'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Book a Venue</a>
@@ -435,7 +438,7 @@ export default function LandingPage() {
             <a href="#/manage-bookings" onClick={(e) => { e.preventDefault(); if (token) navigate('/app#/manage-bookings'); else navigate('/login'); }} className="text-base font-medium text-slate-800 hover:text-[#268053] transition-colors whitespace-nowrap">Admin Panel</a>
           </div>
 
-          <div className="flex items-center gap-4 h-full">
+          <div className="hidden lg:flex items-center gap-4 h-full">
             {token ? (
               <button onClick={() => navigate('/app')} className="px-6 py-2.5 text-sm font-semibold border border-[#268053] text-[#268053] rounded-full hover:bg-emerald-50 transition-all leading-none h-fit">
                 Dashboard
@@ -451,11 +454,35 @@ export default function LandingPage() {
               </>
             )}
           </div>
+
+          {/* MOBILE HAMBURGER MENU */}
+          <div className="lg:hidden flex items-center gap-3">
+            {token ? (
+              <button onClick={() => navigate('/app')} className="px-4 py-2 text-xs font-semibold bg-emerald-50 text-[#268053] rounded-full">Dash</button>
+            ) : (
+              <button onClick={() => navigate('/login')} className="px-4 py-2 text-xs font-semibold bg-emerald-50 text-[#268053] rounded-full">Login</button>
+            )}
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-800">
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </div>
+
+        {/* MOBILE DROPDOWN PANEL */}
+        {isMobileMenuOpen && (
+          <div className="lg:hidden absolute top-full left-0 w-full bg-white border-b border-slate-200 shadow-xl py-4 px-6 flex flex-col gap-4 z-50 animate-in slide-in-from-top-4">
+            <a href="#/venues" onClick={(e) => { e.preventDefault(); navigate('/app#/venues'); setIsMobileMenuOpen(false); }} className="text-sm font-bold text-slate-800 p-2 hover:bg-slate-50 rounded-lg">Browse Venues</a>
+            <a href="/book" onClick={(e) => { e.preventDefault(); navigate('/book'); setIsMobileMenuOpen(false); }} className="text-sm font-bold text-slate-800 p-2 hover:bg-slate-50 rounded-lg">Book a Facility</a>
+            <a href="/track" onClick={(e) => { e.preventDefault(); navigate('/track'); setIsMobileMenuOpen(false); }} className="text-sm font-bold text-slate-800 p-2 hover:bg-slate-50 rounded-lg">Track My Request</a>
+            <a href="#/calendar" onClick={(e) => { e.preventDefault(); navigate('/app#/calendar'); setIsMobileMenuOpen(false); }} className="text-sm font-bold text-slate-800 p-2 hover:bg-slate-50 rounded-lg">View Calendar</a>
+            {token && <a href="#/my-bookings" onClick={(e) => { e.preventDefault(); navigate('/app#/my-bookings'); setIsMobileMenuOpen(false); }} className="text-sm font-bold text-slate-800 p-2 hover:bg-slate-50 rounded-lg">My Bookings</a>}
+          </div>
+        )}
       </nav>
 
       <main>
-        <section className="relative w-full overflow-visible min-h-[550px] pt-24 pb-24 flex flex-col items-center justify-center text-center">
+        {/* RESPONSIVE HERO SECTION */}
+        <section className="relative w-full overflow-visible min-h-[400px] sm:min-h-[550px] pt-24 pb-20 sm:pb-24 flex flex-col items-center justify-center text-center">
           <div className="absolute inset-0 z-0 overflow-hidden">
             {HERO_IMAGES.map((img, idx) => (
               <img 
@@ -483,64 +510,65 @@ export default function LandingPage() {
             )}
           </div>
 
-          <div className="relative z-10 max-w-5xl px-6 pt-24 pb-32 flex flex-col items-center">
-            <div className="inline-flex items-center gap-3 px-6 py-2.5 bg-white/10 backdrop-blur-lg border border-white/30 rounded-full text-white text-xs font-black uppercase tracking-[0.2em] mb-8 shadow-2xl">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_12px_rgba(52,211,153,1)]"></span> Official Venue Booking Portal
+          <div className="relative z-10 w-full max-w-5xl px-4 sm:px-6 pt-16 sm:pt-24 pb-20 sm:pb-32 flex flex-col items-center">
+            <div className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-2 sm:py-2.5 bg-white/10 backdrop-blur-lg border border-white/30 rounded-full text-white text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] mb-6 sm:mb-8 shadow-2xl">
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_12px_rgba(52,211,153,1)]"></span> Official Venue Booking Portal
             </div>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif font-extrabold text-white leading-[1.15] tracking-tight mb-8 drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl font-serif font-extrabold text-white leading-[1.15] tracking-tight mb-6 sm:mb-8 drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
               Ministry of Agriculture<br />Conference Center
             </h1>
-            <p className="text-base md:text-lg text-white/95 font-medium mb-12 max-max-w-2xl leading-relaxed drop-shadow-lg opacity-90 text-center">
+            <p className="text-sm sm:text-base md:text-lg text-white/95 font-medium mb-10 sm:mb-12 max-w-2xl leading-relaxed drop-shadow-lg opacity-90 text-center px-4">
               Reserve world-class conference facilities for your official events, ministerial meetings, and institutional gatherings.
             </p>
-            <div className="flex flex-col sm:flex-row items-center gap-6">
-              <button onClick={() => navigate('/book')} className="w-full sm:w-auto bg-[#da9131] hover:bg-[#c2812c] text-white font-extrabold px-12 py-5 rounded-xl shadow-[0_20px_40px_-15px_rgba(218,145,49,0.5)] transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 text-lg">
-                Request a Booking <ArrowRight className="w-6 h-6" />
+            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto px-4">
+              <button onClick={() => navigate('/book')} className="w-full sm:w-auto bg-[#da9131] hover:bg-[#c2812c] text-white font-extrabold px-8 sm:px-12 py-4 sm:py-5 rounded-xl shadow-[0_20px_40px_-15px_rgba(218,145,49,0.5)] transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 text-base sm:text-lg">
+                Request a Booking <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
-              <button onClick={() => navigate('/app#/calendar')} className="w-full sm:w-auto bg-white/5 backdrop-blur-md border border-white/40 text-white hover:bg-white/10 font-extrabold px-12 py-5 rounded-xl shadow-xl transition-all text-lg">
+              <button onClick={() => navigate('/app#/calendar')} className="w-full sm:w-auto bg-white/5 backdrop-blur-md border border-white/40 text-white hover:bg-white/10 font-extrabold px-8 sm:px-12 py-4 sm:py-5 rounded-xl shadow-xl transition-all text-base sm:text-lg">
                 View Availability
               </button>
             </div>
           </div>
 
-          <div className="absolute bottom-0 translate-y-1/2 z-20 w-full max-w-5xl px-6 lg:px-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-8 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-4 border-emerald-500/50">
-              <span className="text-white text-4xl font-black mb-2"><Counter value={venues.length} /></span>
-              <span className="text-emerald-100/60 text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Venues Available</span>
+          {/* RESPONSIVE STATS BAR */}
+          <div className="absolute bottom-0 translate-y-1/2 z-20 w-full max-w-5xl px-4 sm:px-6 lg:px-12 grid grid-cols-3 gap-2 sm:gap-6">
+            <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-2 sm:border-b-4 border-emerald-500/50">
+              <span className="text-white text-xl sm:text-4xl font-black mb-1 sm:mb-2"><Counter value={venues.length} /></span>
+              <span className="text-emerald-100/60 text-[8px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] group-hover:text-white transition-colors leading-tight">Venues Available</span>
             </div>
-            <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-8 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-4 border-emerald-500/50">
-              <span className="text-white text-4xl font-black mb-2"><Counter value={venues.reduce((acc, v) => acc + (v.capacity || 0), 0)} />+</span>
-              <span className="text-emerald-100/60 text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Max Capacity</span>
+            <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-2 sm:border-b-4 border-emerald-500/50">
+              <span className="text-white text-xl sm:text-4xl font-black mb-1 sm:mb-2"><Counter value={venues.reduce((acc, v) => acc + (v.capacity || 0), 0)} />+</span>
+              <span className="text-emerald-100/60 text-[8px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] group-hover:text-white transition-colors leading-tight">Max Capacity</span>
             </div>
-            <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-8 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-4 border-emerald-500/50">
-              <span className="text-white text-4xl font-black mb-3"><Counter value={technicalServices.length + supportServices.length} /></span>
-              <span className="text-emerald-100/60 text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Available Services</span>
+            <div className="bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 p-4 sm:p-8 rounded-xl sm:rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center text-center group hover:bg-[#268053] transition-all duration-500 border-b-2 sm:border-b-4 border-emerald-500/50">
+              <span className="text-white text-xl sm:text-4xl font-black mb-1 sm:mb-3"><Counter value={technicalServices.length + supportServices.length} /></span>
+              <span className="text-emerald-100/60 text-[8px] sm:text-[10px] font-black uppercase tracking-widest sm:tracking-[0.2em] group-hover:text-white transition-colors leading-tight">Available Services</span>
             </div>
           </div>
         </section>
 
-        <div className="h-24 sm:h-20 bg-white" />
+        <div className="h-16 sm:h-24 bg-white" />
 
-        <section className="bg-[#fcfdfd] py-20 lg:py-24 w-full border-t border-slate-100">
-          <div className="max-w-[1600px] mx-auto px-6 lg:px-12 xl:px-20">
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-8">
+        <section className="bg-[#fcfdfd] py-16 sm:py-24 w-full border-t border-slate-100">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-12 xl:px-20">
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 sm:mb-20 gap-6 sm:gap-8 text-center md:text-left">
               <div className="max-w-3xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full text-[#268053] text-[10px] font-black uppercase tracking-widest mb-6">
+                <div className="inline-flex items-center justify-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full text-[#268053] text-[10px] font-black uppercase tracking-widest mb-4 sm:mb-6">
                   <Building2 className="w-3.5 h-3.5" /> Premium Venues
                 </div>
-                <h2 className="text-4xl md:text-5xl lg:text-6xl font-serif font-extrabold text-[#111827] tracking-tight leading-tight">
-                  Discover Our Premium <br />
+                <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif font-extrabold text-[#111827] tracking-tight leading-tight">
+                  Discover Our Premium <br className="hidden sm:block" />
                   Conference Halls
                 </h2>
               </div>
               <div className="md:text-right">
-                <p className="text-slate-500 font-medium text-lg max-w-md md:ml-auto leading-relaxed">
+                <p className="text-slate-500 font-medium text-sm sm:text-lg max-w-md mx-auto md:ml-auto leading-relaxed">
                   Tailored environments designed for high-impact meetings, international summits, and strategic state workshops.
                 </p>
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10">
               {venues.map((venue, i) => {
                 const isOutOfOrder = venue.status === 'out_of_order';
                 const isVipVenue = (venue.name || '').toLowerCase().includes('vip');
@@ -548,7 +576,7 @@ export default function LandingPage() {
                 const purposes = (venue.bestFor || venue.best_for || 'General Facility').split(',').map((p: string) => p.trim()).filter(Boolean);
 
                 return (
-                  <div key={venue.id} className={`group bg-white rounded-[2rem] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col transition-all duration-500 ease-out relative ${isOutOfOrder ? 'opacity-80 grayscale-[0.5]' : 'hover:shadow-[0_40px_80px_rgba(0,0,0,0.08)] hover:-translate-y-2'}`} style={{ animation: `fade-in-up 0.5s cubic-bezier(0.16,1,0.3,1) ${100 * i}ms both` }}>
+                  <div key={venue.id} className={`group bg-white rounded-[2rem] p-4 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col transition-all duration-500 ease-out relative ${isOutOfOrder ? 'opacity-80 grayscale-[0.5]' : 'hover:shadow-[0_40px_80px_rgba(0,0,0,0.08)] hover:-translate-y-2'}`} style={{ animation: `fade-in-up 0.5s cubic-bezier(0.16,1,0.3,1) ${100 * i}ms both` }}>
                     <div className="relative aspect-[16/10] rounded-[1.5rem] overflow-hidden mb-6 bg-slate-50">
                       <img src={venue.image || getVenueImage(venue.type)} alt={venue.name} className={`w-full h-full object-cover transition-transform duration-1000 ease-out ${isOutOfOrder ? '' : 'group-hover:scale-110 grayscale-[0.1] group-hover:grayscale-0'}`} />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -556,8 +584,8 @@ export default function LandingPage() {
                       {/* OUT OF ORDER BADGE OVERLAY */}
                       {isOutOfOrder && (
                         <div className="absolute inset-0 bg-red-900/60 backdrop-blur-sm flex flex-col items-center justify-center z-20">
-                          <AlertTriangle className="w-12 h-12 text-white mb-2" />
-                          <div className="bg-red-600 text-white text-xs font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-2xl border-2 border-red-500/50">
+                          <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-white mb-2" />
+                          <div className="bg-red-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-widest px-3 sm:px-4 py-1.5 rounded-full shadow-2xl border-2 border-red-500/50">
                             Currently Out of Order
                           </div>
                         </div>
@@ -572,10 +600,10 @@ export default function LandingPage() {
                               return (
                                 <button
                                   onClick={() => status.booking && setActiveBooking(status.booking)}
-                                  className={`flex items-center gap-2 ${status.bgColor} backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-lg transition-all ${status.booking ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'}`}
+                                  className={`flex items-center gap-1.5 sm:gap-2 ${status.bgColor} backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-lg transition-all ${status.booking ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'}`}
                                 >
-                                  <span className={`w-2 h-2 rounded-full ${status.color} animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.5)]`}></span>
-                                  <span className={`text-[10px] font-black uppercase tracking-wider ${status.textColor}`}>{status.label}</span>
+                                  <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${status.color} animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.5)]`}></span>
+                                  <span className={`text-[8px] sm:text-[10px] font-black uppercase tracking-wider ${status.textColor}`}>{status.label}</span>
                                 </button>
                               );
                             })()}
@@ -584,51 +612,51 @@ export default function LandingPage() {
                         
                         {/* VIP EXCLUSIVE BADGE */}
                         {isVipVenue && (
-                          <span className="w-fit text-[9px] uppercase tracking-widest px-3 py-1.5 rounded-xl font-black bg-purple-600 text-white shadow-lg flex items-center gap-1 border border-purple-400">
+                          <span className="w-fit text-[8px] sm:text-[9px] uppercase tracking-widest px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl font-black bg-purple-600 text-white shadow-lg flex items-center gap-1 border border-purple-400">
                             <Crown size={10} /> VIP EXCLUSIVE
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="px-3 flex-1 flex flex-col relative z-30">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className={`text-2xl font-bold tracking-tight transition-colors ${isOutOfOrder ? 'text-slate-400 line-through' : 'text-[#111827] group-hover:text-[#268053]'}`}>{venue.name}</h3>
-                        <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-slate-500 text-[10px] font-black uppercase tracking-widest leading-none">
+                    <div className="px-2 sm:px-3 flex-1 flex flex-col relative z-30">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2">
+                        <h3 className={`text-xl sm:text-2xl font-bold tracking-tight transition-colors truncate ${isOutOfOrder ? 'text-slate-400 line-through' : 'text-[#111827] group-hover:text-[#268053]'}`}>{venue.name}</h3>
+                        <span className="w-fit px-2 py-1 bg-slate-100 rounded-lg text-slate-500 text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-none">
                           {venue.type}
                         </span>
                       </div>
                       
-                      <div className="flex items-center gap-3 mb-6 mt-3">
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border ${isOutOfOrder ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm'}`}>
-                          <Users size={16} className={isOutOfOrder ? 'text-slate-400' : 'text-emerald-500'} /> 
+                      <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 mt-2 sm:mt-3">
+                        <div className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest border ${isOutOfOrder ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm'}`}>
+                          <Users size={14} className={isOutOfOrder ? 'text-slate-400' : 'text-emerald-500'} /> 
                           {venue.capacity} Pax
                         </div>
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest border ${isOutOfOrder ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-[#111827] text-amber-400 border-[#111827] shadow-sm'}`}>
-                          <Tag size={16} className={isOutOfOrder ? 'text-slate-400' : 'text-amber-500'} /> 
+                        <div className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest border ${isOutOfOrder ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-[#111827] text-amber-400 border-[#111827] shadow-sm'}`}>
+                          <Tag size={14} className={isOutOfOrder ? 'text-slate-400' : 'text-amber-500'} /> 
                           {venue.price || '0.00'} ETB/Day
                         </div>
                       </div>
 
-                      <div className="mt-auto pt-6 border-t border-slate-50">
+                      <div className="mt-auto pt-4 sm:pt-6 border-t border-slate-50">
                         
-                        <div className="flex flex-col mb-6">
-                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Upcoming Schedule</span>
+                        <div className="flex flex-col mb-4 sm:mb-6">
+                          <span className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-2 sm:mb-3 leading-none">Upcoming Schedule</span>
 
                           {(() => {
-                            if (isOutOfOrder) return <p className="text-xs font-medium text-slate-400 italic">Schedule unavailable</p>;
+                            if (isOutOfOrder) return <p className="text-[10px] sm:text-xs font-medium text-slate-400 italic">Schedule unavailable</p>;
                             
                             // NEW CHECK: Protect VIP Schedules
                             if (isVipVenue) return (
-                              <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-3 flex items-center gap-2">
+                              <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-2.5 sm:p-3 flex items-center gap-2">
                                 <Crown size={14} className="text-purple-400"/>
-                                <span className="text-xs font-bold text-purple-600/70">Schedule Restricted</span>
+                                <span className="text-[10px] sm:text-xs font-bold text-purple-600/70">Schedule Restricted</span>
                               </div>
                             );
 
                             const upcoming = getUpcomingBookings(venue.id);
                             if (upcoming.length === 0) {
-                              return <p className="text-xs font-medium text-slate-400 italic">No future bookings scheduled</p>;
+                              return <p className="text-[10px] sm:text-xs font-medium text-slate-400 italic">No future bookings scheduled</p>;
                             }
                             return (
                               <ScheduleCarousel
@@ -640,34 +668,29 @@ export default function LandingPage() {
 
                         </div>
                         
-                        <div className="flex flex-col mb-8">
-                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-3 leading-none">Ideal Setting For</span>
-                          <div className="flex flex-col gap-2">
+                        <div className="flex flex-col mb-6 sm:mb-8">
+                          <span className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest text-[#268053] mb-2 sm:mb-3 leading-none">Ideal Setting For</span>
+                          <div className="flex flex-col gap-1.5 sm:gap-2">
                             {purposes.slice(0, 2).map((purpose: string, idx: number) => (
-                              <p key={idx} className="text-xs text-slate-500 font-bold flex items-center gap-2 truncate">
-                                <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                              <p key={idx} className="text-[10px] sm:text-xs text-slate-500 font-bold flex items-center gap-2 truncate">
+                                <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
                                 <span className="truncate">{purpose}</span>
                               </p>
                             ))}
-                            {purposes.length > 2 && (
-                              <p className="text-[10px] font-black text-slate-400 ml-6 mt-1 uppercase tracking-widest">
-                                + {purposes.length - 2} more capabilities
-                              </p>
-                            )}
                           </div>
                         </div>
 
                         {/* Lock button for VIP Venues if user is not an Admin/Leadership */}
                         {isOutOfOrder ? (
-                          <button disabled className="w-full py-5 text-sm font-black bg-slate-200 text-slate-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed">
+                          <button disabled className="w-full py-4 sm:py-5 text-xs sm:text-sm font-black bg-slate-200 text-slate-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed">
                             Venue Unavailable
                           </button>
                         ) : isVipVenue && !isPrivilegedUser ? (
-                          <button disabled className="w-full py-5 text-sm font-black bg-purple-50 text-purple-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed border border-purple-200">
-                            <Crown className="w-4 h-4" /> VIP Exclusive Facility
+                          <button disabled className="w-full py-4 sm:py-5 text-[10px] sm:text-sm font-black bg-purple-50 text-purple-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-not-allowed border border-purple-200">
+                            <Crown className="w-3 h-3 sm:w-4 sm:h-4" /> VIP Exclusive Facility
                           </button>
                         ) : (
-                          <button onClick={() => navigate(`/book?venueId=${venue.id}`)} className="w-full py-5 text-sm font-black bg-[#111827] text-white hover:bg-[#268053] transition-all duration-300 rounded-2xl shadow-xl flex items-center justify-center gap-2 group/btn">
+                          <button onClick={() => navigate(`/book?venueId=${venue.id}`)} className="w-full py-4 sm:py-5 text-xs sm:text-sm font-black bg-[#111827] text-white hover:bg-[#268053] transition-all duration-300 rounded-2xl shadow-xl flex items-center justify-center gap-2 group/btn">
                             Book This Venue <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
                           </button>
                         )}
@@ -680,50 +703,49 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="py-24 bg-white border-t border-slate-100">
-          <div className="max-w-7xl mx-auto px-6 lg:px-12 xl:px-20">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-serif font-black text-[#111827] mb-4">How It Works</h2>
-              <p className="text-slate-500 font-medium">Follow these four simple steps to secure your official ministerial event venue.</p>
+        <section className="py-16 sm:py-24 bg-white border-t border-slate-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 xl:px-20">
+            <div className="text-center mb-10 sm:mb-16">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-black text-[#111827] mb-3 sm:mb-4">How It Works</h2>
+              <p className="text-sm sm:text-base text-slate-500 font-medium">Follow these four simple steps to secure your official ministerial event venue.</p>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-10">
               {[
                 { step: '01', title: 'Register Account', desc: 'Create your official Event Organizer profile to access the booking portal.' },
                 { step: '02', title: 'Select Venue', desc: 'Browse available halls and check real-time availability for your preferred dates.' },
                 { step: '03', title: 'Submit Request', desc: 'Fill out the event details and attach your official request letter for approval.' },
                 { step: '04', title: 'Confirmation', desc: 'Receive instant updates as your booking is reviewed and confirmed by management.' },
               ].map((item, i) => (
-                <div key={i} className="relative group p-8 rounded-[2rem] bg-slate-50 border border-slate-100 hover:bg-[#268053] hover:border-[#268053] transition-all duration-500">
-                  <span className="text-4xl font-black text-emerald-100/50 group-hover:text-white/20 transition-colors absolute top-6 right-8">{item.step}</span>
-                  <h4 className="text-xl font-bold text-[#111827] group-hover:text-white mb-3 mt-4">{item.title}</h4>
-                  <p className="text-slate-500 group-hover:text-white/80 text-sm font-medium leading-relaxed">{item.desc}</p>
+                <div key={i} className="relative group p-6 sm:p-8 rounded-2xl sm:rounded-[2rem] bg-slate-50 border border-slate-100 hover:bg-[#268053] hover:border-[#268053] transition-all duration-500">
+                  <span className="text-3xl sm:text-4xl font-black text-emerald-100/50 group-hover:text-white/20 transition-colors absolute top-4 right-6 sm:top-6 sm:right-8">{item.step}</span>
+                  <h4 className="text-lg sm:text-xl font-bold text-[#111827] group-hover:text-white mb-2 sm:mb-3 mt-4">{item.title}</h4>
+                  <p className="text-slate-500 group-hover:text-white/80 text-xs sm:text-sm font-medium leading-relaxed">{item.desc}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="faq" className="py-24 bg-[#f8fafc] border-y border-slate-200">
-          <div className="max-w-4xl mx-auto px-6">
-            <div className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-full text-slate-500 text-[10px] font-black uppercase tracking-widest mb-6">
+        <section id="faq" className="py-16 sm:py-24 bg-[#f8fafc] border-y border-slate-200">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <div className="text-center mb-10 sm:mb-16">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-full text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4 sm:mb-6">
                 Help Center
               </div>
-              <h2 className="text-3xl md:text-4xl font-serif font-black text-[#111827] mb-4">Frequently Asked Questions</h2>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-black text-[#111827] mb-4">Frequently Asked Questions</h2>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {[
                 { q: "Who can book a venue?", a: "The portal is primarily for Ministry of Agriculture events and official partners. External organizations must be registered Event Organizers and have an official invitation or partnership letter." },
                 { q: "What documents are required for booking?", a: "An official request letter signed by your organization's head is required. You can upload this directly in the booking form as a PDF or image." },
                 { q: "Can I cancel a booking?", a: "Yes, you can cancel your request through 'My Bookings'. However, confirmed or completed bookings require administrative intervention for cancellation." },
                 { q: "What technical support is provided?", a: "All venues include high-speed Wi-Fi and basic AV equipment. Advanced ICT support and catering can be requested during the booking process." },
-                { q: "When will I receive confirmation?", a: "Management reviews requests within 24-48 business hours. You will receive an email notification as soon as your status is updated." }
               ].map((faq, i) => (
-                <div key={i} className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm hover:shadow-md transition-all">
-                  <h4 className="text-lg font-bold text-[#111827] mb-4 flex gap-4">
+                <div key={i} className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-sm hover:shadow-md transition-all">
+                  <h4 className="text-base sm:text-lg font-bold text-[#111827] mb-3 sm:mb-4 flex gap-3 sm:gap-4">
                     <span className="text-emerald-600">Q.</span> {faq.q}
                   </h4>
-                  <p className="text-slate-600 text-sm font-medium leading-relaxed pl-8 border-l border-emerald-100">
+                  <p className="text-slate-600 text-xs sm:text-sm font-medium leading-relaxed pl-6 sm:pl-8 border-l border-emerald-100">
                     {faq.a}
                   </p>
                 </div>
@@ -733,48 +755,39 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="bg-[#0f172a] text-white pt-20 pb-12 px-6 lg:px-12 xl:px-20 mt-0">
+      <footer className="bg-[#0f172a] text-white pt-16 sm:pt-20 pb-8 sm:pb-12 px-4 sm:px-6 lg:px-12 xl:px-20 mt-0">
         <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-12 pb-20 border-b border-white/10 mb-20">
-            <div className="md:col-span-1">
-              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-6">Main Headquarters</h4>
-              <p className="text-slate-300 text-sm font-medium leading-relaxed">Ministry of Agriculture Area<br />Addis Ababa, Ethiopia<br />P.O. Box 62347</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 sm:gap-12 pb-16 sm:pb-20 border-b border-white/10 mb-12 sm:mb-20">
+            <div>
+              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-4 sm:mb-6">Main Headquarters</h4>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">Ministry of Agriculture Area<br />Addis Ababa, Ethiopia<br />P.O. Box 62347</p>
             </div>
             <div>
-              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-6">Office Hours</h4>
-              <p className="text-slate-300 text-sm font-medium leading-relaxed">Mon - Fri: 8:30 AM - 5:30 PM<br />Sat: 9:00 AM - 12:30 PM<br />Sun: Closed</p>
+              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-4 sm:mb-6">Office Hours</h4>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">Mon - Fri: 8:30 AM - 5:30 PM<br />Sat: 9:00 AM - 12:30 PM<br />Sun: Closed</p>
             </div>
             <div>
-              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-6">ICT Support</h4>
-              <p className="text-slate-300 text-sm font-medium leading-relaxed">Email: support@moa.gov.et<br />Phone: +251 11 123 4567<br />Internal: Ext. 405</p>
+              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-4 sm:mb-6">ICT Support</h4>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">Email: support@moa.gov.et<br />Phone: +251 11 123 4567<br />Internal: Ext. 405</p>
             </div>
             <div>
-              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-6">Facility Rental</h4>
-              <p className="text-slate-300 text-sm font-medium leading-relaxed">Email: events@moa.gov.et<br />Phone: +251 11 123 8899</p>
+              <h4 className="text-emerald-400 font-extrabold text-[10px] uppercase tracking-[0.2em] mb-4 sm:mb-6">Facility Rental</h4>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">Email: events@moa.gov.et<br />Phone: +251 11 123 8899</p>
             </div>
           </div>
-          <div className="flex flex-col md:flex-row justify-between gap-12 pb-12">
+          <div className="flex flex-col md:flex-row justify-between gap-8 sm:gap-12 pb-8 sm:pb-12">
             <div className="max-w-sm">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center shrink-0">
                   <img src={moaLogo} alt="MoA Logo" className="w-full h-full object-contain grayscale brightness-200" />
                 </div>
-                <h3 className="text-xl font-bold tracking-tight text-white leading-none">MoA Conference Center</h3>
+                <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white leading-none">MoA Conference Center</h3>
               </div>
-              <p className="text-slate-400 text-sm leading-relaxed font-medium">Providing world-class infrastructure for the Ministry of Agriculture of Ethiopia. Digital transformation powered by UNOPS.</p>
-            </div>
-            <div className="flex items-center gap-6">
-              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Privacy Policy</a>
-              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Terms of Service</a>
-              <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm font-bold">Accessibility</a>
+              <p className="text-slate-400 text-xs sm:text-sm leading-relaxed font-medium">Providing world-class infrastructure for the Ministry of Agriculture of Ethiopia. Digital transformation powered by UNOPS.</p>
             </div>
           </div>
-          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">© {new Date().getFullYear()} MoA Ethiopia. All rights reserved.</p>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Status: Operational</span>
-            </div>
+          <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-slate-500 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-center sm:text-left">© {new Date().getFullYear()} MoA Ethiopia. All rights reserved.</p>
           </div>
         </div>
       </footer>
